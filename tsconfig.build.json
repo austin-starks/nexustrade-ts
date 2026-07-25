@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "outDir": "dist/esm",
+    "rootDir": "src",
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    // `files` publishes dist only, so maps would point at sources that are not
+    // in the tarball. Consumers get .d.ts; sources live in the public repo.
+    "sourceMap": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*.ts"]
+}

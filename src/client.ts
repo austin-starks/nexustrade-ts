@@ -1,0 +1,809 @@
+/**
+ * Typed NexusTrade JSON API client.
+ *
+ * Mirrors the Python client method-for-method; `verifyNtSdk.ts` asserts the two
+ * surfaces stay identical. Transport-generic: callers pass an API key/base URL,
+ * or set NEXUSTRADE_API_KEY / NEXUSTRADE_API_BASE_URL.
+ */
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type JsonObject = { [key: string]: JsonValue };
+
+const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+const MAX_ERROR_BYTES = 64 * 1024;
+// Keep in lockstep with _MAX_REDIRECTS in sdk/python/nexustrade/client.py —
+// checkSdkClientParity.ts asserts the two numbers match.
+const MAX_REDIRECTS = 5;
+// `status` for errors no HTTP status describes: the request never reached the
+// API, or it returned 2xx with an envelope the client could not use. Reporting
+// a literal 200 there would misattribute a 201 response.
+const NO_HTTP_STATUS = 0;
+
+// Polling defaults. Every NexusTrade job — backtest, optimization,
+// walk-forward, and any future operation kind — reports through the same
+// envelope, so one poller serves all of them. Kept in lockstep with the Python
+// SDK by checkSdkClientParity.ts; the backoff is deterministic (no jitter) so
+// both languages issue the identical request sequence.
+const DEFAULT_POLL_TIMEOUT_SECONDS = 900;
+const DEFAULT_POLL_INTERVAL_SECONDS = 2;
+const MAX_POLL_INTERVAL_SECONDS = 15;
+const POLL_BACKOFF_FACTOR = 1.5;
+const TERMINAL_STATUSES = ["cancelled", "completed", "failed"];
+
+export class NexusTradeApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(`${code}: ${message}`);
+    this.name = "NexusTradeApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+interface Origin {
+  scheme: string;
+  host: string;
+  port: string;
+}
+
+function origin(url: string): Origin {
+  const parsed = new URL(url);
+  const scheme = parsed.protocol.replace(":", "").toLowerCase();
+  return {
+    scheme,
+    host: parsed.hostname.toLowerCase(),
+    port: parsed.port || (scheme === "https" ? "443" : "80"),
+  };
+}
+
+function sameOrigin(left: string, right: string): boolean {
+  const a = origin(left);
+  const b = origin(right);
+  return a.scheme === b.scheme && a.host === b.host && a.port === b.port;
+}
+
+export interface RequestOptions {
+  body?: JsonObject;
+  idempotencyKey?: string;
+}
+
+export interface Transport {
+  request(
+    method: string,
+    path: string,
+    options?: RequestOptions,
+  ): Promise<JsonObject>;
+}
+
+/**
+ * Transports that can also return raw bytes.
+ *
+ * Lake result parts are Parquet, so they do not fit `Transport`, which is a
+ * JSON contract. Declaring the capability keeps custom and test transports able
+ * to implement downloads through a typed interface instead of a duck-typed
+ * check.
+ */
+export interface BinaryTransport extends Transport {
+  requestBytes(
+    method: string,
+    path: string,
+    options?: { byteRange?: [number, number]; maxBytes?: number },
+  ): Promise<Uint8Array>;
+}
+
+function supportsBinary(transport: Transport): transport is BinaryTransport {
+  return (
+    typeof (transport as BinaryTransport).requestBytes === "function"
+  );
+}
+
+export interface HttpTransportOptions {
+  apiKey: string;
+  baseUrl: string;
+  timeoutSeconds?: number;
+}
+
+function assertValidApiKey(apiKey: string): void {
+  const invalid =
+    typeof apiKey !== "string" ||
+    apiKey.length === 0 ||
+    [...apiKey].some(
+      (character) =>
+        /\s/.test(character) || (character.codePointAt(0) ?? 0) < 32,
+    );
+  if (invalid) {
+    throw new Error("NexusTrade apiKey must be a non-empty token.");
+  }
+}
+
+function assertValidBaseUrl(baseUrl: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error("NexusTrade baseUrl must be an absolute URL.");
+  }
+  if (!parsed.protocol || !parsed.hostname) {
+    throw new Error("NexusTrade baseUrl must be an absolute URL.");
+  }
+  const scheme = parsed.protocol.replace(":", "").toLowerCase();
+  const isLoopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(
+    parsed.hostname.toLowerCase(),
+  );
+  if (scheme !== "https" && !(scheme === "http" && isLoopback)) {
+    throw new Error(
+      "NexusTrade baseUrl must use HTTPS (HTTP is allowed only for loopback development).",
+    );
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("NexusTrade baseUrl must not contain credentials.");
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error("NexusTrade baseUrl must not contain a query or fragment.");
+  }
+}
+
+/** Reads at most `limit` bytes, so an oversized body is never fully buffered. */
+async function readCapped(
+  response: Response,
+  limit: number,
+): Promise<{ bytes: Uint8Array; truncated: boolean }> {
+  if (!response.body) {
+    return { bytes: new Uint8Array(0), truncated: false };
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      total += value.byteLength;
+      if (total > limit) {
+        return { bytes: new Uint8Array(0), truncated: true };
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { bytes, truncated: false };
+}
+
+function decodeJsonObject(bytes: Uint8Array, status: number): JsonObject {
+  if (bytes.byteLength === 0) return {};
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new NexusTradeApiError(
+      status,
+      "invalid_response",
+      "NexusTrade returned invalid JSON.",
+    );
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(text);
+  } catch {
+    throw new NexusTradeApiError(
+      status,
+      "invalid_response",
+      "NexusTrade returned invalid JSON.",
+    );
+  }
+  if (typeof decoded !== "object" || decoded === null || Array.isArray(decoded)) {
+    throw new NexusTradeApiError(
+      status,
+      "invalid_response",
+      "NexusTrade returned a non-object JSON response.",
+    );
+  }
+  return decoded as JsonObject;
+}
+
+export class HttpTransport implements Transport {
+  // `#` fields, not TS `private` — the credential must be unreachable at
+  // runtime too, matching the Python dataclass's `repr=False`.
+  readonly #apiKey: string;
+  readonly #baseUrl: string;
+  readonly #timeoutSeconds: number;
+
+  constructor(options: HttpTransportOptions) {
+    const timeoutSeconds = options.timeoutSeconds ?? 30;
+    assertValidApiKey(options.apiKey);
+    assertValidBaseUrl(options.baseUrl);
+    if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+      throw new Error("timeoutSeconds must be positive.");
+    }
+    this.#apiKey = options.apiKey;
+    this.#baseUrl = options.baseUrl;
+    this.#timeoutSeconds = timeoutSeconds;
+  }
+
+  get baseUrl(): string {
+    return this.#baseUrl;
+  }
+
+  async request(
+    method: string,
+    path: string,
+    options: RequestOptions = {},
+  ): Promise<JsonObject> {
+    const url = `${this.#baseUrl.replace(/\/+$/, "")}/nexustrade/${path.replace(/^\/+/, "")}`;
+    const payload =
+      options.body !== undefined ? JSON.stringify(options.body) : undefined;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.#apiKey}`,
+      Accept: "application/json",
+    };
+    if (payload !== undefined) headers["Content-Type"] = "application/json";
+    if (options.idempotencyKey !== undefined) {
+      headers["Idempotency-Key"] = options.idempotencyKey;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(),
+      this.#timeoutSeconds * 1000,
+    );
+    try {
+      let currentUrl = url;
+      for (let hop = 0; ; hop += 1) {
+        let response: Response;
+        try {
+          response = await fetch(currentUrl, {
+            method,
+            headers,
+            body: payload,
+            redirect: "manual",
+            signal: controller.signal,
+          });
+        } catch (error) {
+          const reason =
+            error instanceof Error ? error.message : String(error);
+          throw new NexusTradeApiError(NO_HTTP_STATUS, "transport_error", reason);
+        }
+
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get("location");
+          if (!location) {
+            throw new NexusTradeApiError(
+              response.status,
+              "invalid_response",
+              "NexusTrade returned a redirect without a location.",
+            );
+          }
+          const next = new URL(location, currentUrl).toString();
+          if (!sameOrigin(currentUrl, next)) {
+            throw new NexusTradeApiError(
+              response.status,
+              "unsafe_redirect",
+              "NexusTrade refused a cross-origin API redirect.",
+            );
+          }
+          // Never replay a mutation. Re-sending the body would double-submit a
+          // paid job; dropping it (what urllib does) would send a meaningless
+          // bodyless GET to a POST route. Both SDKs refuse instead.
+          if (method.toUpperCase() !== "GET") {
+            throw new NexusTradeApiError(
+              response.status,
+              "unsafe_redirect",
+              `NexusTrade refused to follow a redirect on a ${method} request.`,
+            );
+          }
+          if (hop >= MAX_REDIRECTS) {
+            throw new NexusTradeApiError(
+              response.status,
+              "transport_error",
+              "NexusTrade exceeded the SDK redirect limit.",
+            );
+          }
+          currentUrl = next;
+          continue;
+        }
+
+        if (!response.ok) {
+          const { bytes } = await readCapped(response, MAX_ERROR_BYTES);
+          let code = "api_error";
+          let message = response.statusText || `HTTP ${response.status}`;
+          try {
+            const decoded = decodeJsonObject(bytes, response.status);
+            const errorBody = decoded.error;
+            if (
+              typeof errorBody === "object" &&
+              errorBody !== null &&
+              !Array.isArray(errorBody)
+            ) {
+              const body = errorBody as JsonObject;
+              if (body.code) code = String(body.code);
+              if (body.message) message = String(body.message);
+            }
+          } catch {
+            // Non-JSON error bodies keep the transport-level code/message.
+          }
+          throw new NexusTradeApiError(response.status, code, message);
+        }
+
+        const { bytes, truncated } = await readCapped(
+          response,
+          MAX_RESPONSE_BYTES,
+        );
+        if (truncated) {
+          throw new NexusTradeApiError(
+            response.status,
+            "response_too_large",
+            "NexusTrade response exceeded the SDK size limit.",
+          );
+        }
+        return decodeJsonObject(bytes, response.status);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+export interface NexusTradeClientOptions {
+  apiKey?: string;
+  baseUrl?: string;
+  transport?: Transport;
+}
+
+const BACKTEST_ARG_NAMES: ReadonlyArray<readonly [string, string]> = [
+  ["start_date", "startDate"],
+  ["end_date", "endDate"],
+  ["baseline_symbol", "baseline"],
+  ["interval", "interval"],
+  ["initial_value", "initialValue"],
+  ["generate_events", "generateEvents"],
+  ["fee_config", "feeConfig"],
+];
+
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Match Python's `urllib.parse.quote(value, safe="")`, which escapes `!'()*`
+ * where `encodeURIComponent` leaves them literal. Both decode identically, but
+ * the two SDKs must put the same bytes on the wire — see the shared
+ * conformance fixture.
+ */
+function encodePathSegment(value: string): string {
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (character) =>
+      `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+  );
+}
+
+export interface WaitOptions {
+  timeoutSeconds?: number;
+  pollIntervalSeconds?: number;
+  maxPollIntervalSeconds?: number;
+  raiseOnFailure?: boolean;
+}
+
+function operationFailure(
+  operation: JsonObject,
+  operationId: string,
+  status: string,
+): NexusTradeApiError {
+  let code = status === "cancelled" ? "operation_cancelled" : "operation_failed";
+  let message = `Operation ${operationId} ${status}.`;
+  const error = operation.error;
+  if (isJsonObject(error)) {
+    if (error.code) code = String(error.code);
+    if (error.message) message = String(error.message);
+  }
+  return new NexusTradeApiError(NO_HTTP_STATUS, code, message);
+}
+
+/**
+ * Poll `fetch(operationId)` until the operation reaches a terminal state.
+ *
+ * Works for any operation kind because every NexusTrade job reports the same
+ * `{id, kind, status, result?, error?}` envelope. Pass any getter with that
+ * shape — `client.getBacktest`, `getOptimization`, `getWalkForward`.
+ *
+ * Resolves with the terminal operation. Rejects with `NexusTradeApiError` on
+ * timeout, and on a failed/cancelled operation unless `raiseOnFailure` is
+ * false. Transport errors from `fetch` propagate — a poller that swallowed
+ * them would report an infrastructure outage as a still-running job.
+ */
+export async function waitForOperation(
+  fetch: (operationId: string) => Promise<JsonObject>,
+  operationId: string,
+  options: WaitOptions = {},
+): Promise<JsonObject> {
+  const timeoutSeconds = options.timeoutSeconds ?? DEFAULT_POLL_TIMEOUT_SECONDS;
+  const pollIntervalSeconds =
+    options.pollIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS;
+  const maxPollIntervalSeconds =
+    options.maxPollIntervalSeconds ?? MAX_POLL_INTERVAL_SECONDS;
+  const raiseOnFailure = options.raiseOnFailure ?? true;
+
+  if (!(timeoutSeconds > 0)) {
+    throw new Error("timeoutSeconds must be positive.");
+  }
+  if (pollIntervalSeconds < 0 || maxPollIntervalSeconds < 0) {
+    throw new Error("poll intervals must not be negative.");
+  }
+
+  const deadline = Date.now() + timeoutSeconds * 1000;
+  let interval = Math.min(pollIntervalSeconds, maxPollIntervalSeconds);
+  for (;;) {
+    const operation = await fetch(operationId);
+    const status = String(operation.status ?? "");
+    if (TERMINAL_STATUSES.includes(status)) {
+      if (raiseOnFailure && status !== "completed") {
+        throw operationFailure(operation, operationId, status);
+      }
+      return operation;
+    }
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "operation_timeout",
+        `Operation ${operationId} was still '${status || "unknown"}' after ` +
+          `${timeoutSeconds}s. It is still running — poll again with the ` +
+          "same id rather than resubmitting.",
+      );
+    }
+    if (interval > 0) {
+      const delayMs = Math.min(interval * 1000, remainingMs);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    interval = Math.min(interval * POLL_BACKOFF_FACTOR, maxPollIntervalSeconds);
+  }
+}
+
+export class NexusTradeClient {
+  private readonly transport: Transport;
+
+  constructor(options: NexusTradeClientOptions = {}) {
+    if (options.transport) {
+      this.transport = options.transport;
+      return;
+    }
+    const apiKey = options.apiKey ?? process.env.NEXUSTRADE_API_KEY;
+    const baseUrl = options.baseUrl ?? process.env.NEXUSTRADE_API_BASE_URL;
+    if (!apiKey || !baseUrl) {
+      throw new Error(
+        "NexusTradeClient requires an API key. Create one at " +
+          "https://nexustrade.io/developers, then either pass apiKey/baseUrl " +
+          "or set NEXUSTRADE_API_KEY and NEXUSTRADE_API_BASE_URL " +
+          "(base URL is https://nexustrade.io/api/v1). " +
+          "OAuth tokens are not accepted by this API.",
+      );
+    }
+    this.transport = new HttpTransport({ apiKey, baseUrl });
+  }
+
+  static fromEnvironment(): NexusTradeClient {
+    return new NexusTradeClient();
+  }
+
+  async createPortfolio(
+    portfolio: JsonObject,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    const response = await this.transport.request("POST", "portfolios", {
+      body: portfolio,
+      idempotencyKey: options.idempotencyKey,
+    });
+    const result = response.portfolio;
+    if (!isJsonObject(result)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Portfolio response is missing portfolio.",
+      );
+    }
+    return result;
+  }
+
+  async createBacktests(
+    backtests: ReadonlyArray<JsonObject>,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject[]> {
+    const inputs = backtests.map((item) => backtestInput(item));
+    const response = await this.transport.request("POST", "backtests/batch", {
+      body: { backtests: inputs },
+      idempotencyKey: options.idempotencyKey,
+    });
+    const operations = response.operations;
+    if (
+      !Array.isArray(operations) ||
+      !operations.every((operation) => isJsonObject(operation))
+    ) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Backtest response is missing operations.",
+      );
+    }
+    return operations as JsonObject[];
+  }
+
+  /** Submit one generated `backtest(...)` handle or raw API input. */
+  async createBacktest(
+    backtest: JsonObject,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    const operations = await this.createBacktests([backtest], options);
+    if (operations.length !== 1) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Single backtest response returned the wrong operation count.",
+      );
+    }
+    return operations[0];
+  }
+
+  async getBacktest(backtestId: string): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "GET",
+      `backtests/${encodePathSegment(backtestId)}`,
+    );
+    return operationOf(response);
+  }
+
+  async createOptimization(
+    handle: JsonObject,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    return this.createPortfolioJob(
+      "optimizations",
+      handle,
+      options.idempotencyKey,
+    );
+  }
+
+  async getOptimization(optimizationId: string): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "GET",
+      `optimizations/${encodePathSegment(optimizationId)}`,
+    );
+    return operationOf(response);
+  }
+
+  async createWalkForward(
+    handle: JsonObject,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    return this.createPortfolioJob(
+      "walk-forward-studies",
+      handle,
+      options.idempotencyKey,
+    );
+  }
+
+  async getWalkForward(studyId: string): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "GET",
+      `walk-forward-studies/${encodePathSegment(studyId)}`,
+    );
+    return operationOf(response);
+  }
+
+  async createLakeQuery(
+    request: JsonObject,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    const response = await this.transport.request("POST", "lake/queries", {
+      body: request,
+      idempotencyKey: options.idempotencyKey,
+    });
+    return operationOf(response);
+  }
+
+  async getLakeQuery(queryId: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "GET",
+        `lake/queries/${encodePathSegment(queryId)}`,
+      ),
+    );
+  }
+
+  async cancelLakeQuery(queryId: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "POST",
+        `lake/queries/${encodePathSegment(queryId)}/cancel`,
+      ),
+    );
+  }
+
+  async getLakeQueryManifest(queryId: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "GET",
+        `lake/queries/${encodePathSegment(queryId)}/manifest`,
+      ),
+    );
+  }
+
+  async getLakeCatalog(): Promise<JsonObject[]> {
+    const response = await this.transport.request("GET", "lake/catalog");
+    const tables = response.tables;
+    if (!Array.isArray(tables) || !tables.every((t) => isJsonObject(t))) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Lake catalog response is missing tables.",
+      );
+    }
+    return tables as JsonObject[];
+  }
+
+  async describeLakeTable(table: string): Promise<JsonObject> {
+    const name = table.startsWith("lake.") ? table.slice(5) : table;
+    const response = await this.transport.request(
+      "GET",
+      `lake/catalog/lake/${encodePathSegment(name)}`,
+    );
+    const described = response.table;
+    if (!isJsonObject(described)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Lake describe response is missing table.",
+      );
+    }
+    return described;
+  }
+
+  /** Download one Parquet part, optionally a byte range of it. */
+  async downloadLakeQueryPart(
+    queryId: string,
+    part: number,
+    options: { byteRange?: [number, number]; maxBytes?: number } = {},
+  ): Promise<Uint8Array> {
+    if (!supportsBinary(this.transport)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "unsupported_transport",
+        "Lake part download requires a transport implementing requestBytes.",
+      );
+    }
+    return this.transport.requestBytes(
+      "GET",
+      `lake/queries/${encodePathSegment(queryId)}/parts/${Math.trunc(part)}`,
+      options,
+    );
+  }
+
+  /** Resolve once a lake query is terminal. See `waitForOperation`. */
+  async waitForLakeQuery(
+    queryId: string,
+    options: WaitOptions = {},
+  ): Promise<JsonObject> {
+    return waitForOperation((id) => this.getLakeQuery(id), queryId, options);
+  }
+
+  /** Resolve once a backtest is terminal. See `waitForOperation`. */
+  async waitForBacktest(
+    backtestId: string,
+    options: WaitOptions = {},
+  ): Promise<JsonObject> {
+    return waitForOperation((id) => this.getBacktest(id), backtestId, options);
+  }
+
+  /** Resolve once an optimization is terminal. See `waitForOperation`. */
+  async waitForOptimization(
+    optimizationId: string,
+    options: WaitOptions = {},
+  ): Promise<JsonObject> {
+    return waitForOperation(
+      (id) => this.getOptimization(id),
+      optimizationId,
+      options,
+    );
+  }
+
+  /** Resolve once a walk-forward study is terminal. See `waitForOperation`. */
+  async waitForWalkForward(
+    studyId: string,
+    options: WaitOptions = {},
+  ): Promise<JsonObject> {
+    return waitForOperation((id) => this.getWalkForward(id), studyId, options);
+  }
+
+  /** Wait on a whole `createBacktests` batch, in submission order. */
+  async waitForBacktests(
+    operations: ReadonlyArray<JsonObject>,
+    options: WaitOptions = {},
+  ): Promise<JsonObject[]> {
+    const finished: JsonObject[] = [];
+    for (const operation of operations) {
+      finished.push(await this.waitForBacktest(String(operation.id), options));
+    }
+    return finished;
+  }
+
+  private async createPortfolioJob(
+    path: string,
+    handle: JsonObject,
+    idempotencyKey: string,
+  ): Promise<JsonObject> {
+    const args = handle.args;
+    const response = await this.transport.request("POST", path, {
+      body: {
+        portfolio: handle.portfolio ?? null,
+        args: isJsonObject(args) ? args : {},
+      },
+      idempotencyKey,
+    });
+    return operationOf(response);
+  }
+}
+
+function backtestInput(item: JsonObject): JsonObject {
+  const tool = item.tool;
+  if (tool === undefined || tool === null) {
+    return { ...item };
+  }
+  if (tool !== "backtest_portfolio") {
+    throw new Error(
+      "createBacktests accepts backtest(...) handles or raw API inputs.",
+    );
+  }
+  const portfolio = item.portfolio;
+  const args = item.args;
+  if (!isJsonObject(portfolio) || !isJsonObject(args)) {
+    throw new Error("backtest(...) handle is missing portfolio or args.");
+  }
+  const normalized: JsonObject = { portfolio: { ...portfolio } };
+  for (const [source, target] of BACKTEST_ARG_NAMES) {
+    const value = args[source];
+    if (value !== undefined && value !== null) {
+      normalized[target] = value;
+    }
+  }
+  return normalized;
+}
+
+function operationOf(response: JsonObject): JsonObject {
+  const operation = response.operation;
+  if (!isJsonObject(operation)) {
+    throw new NexusTradeApiError(
+      NO_HTTP_STATUS,
+      "invalid_response",
+      "Response is missing operation.",
+    );
+  }
+  return operation;
+}
+
+/** Convenience wrapper for scripts that do not need a persistent client. */
+export async function createPortfolio(
+  portfolio: JsonObject,
+  options: { idempotencyKey: string; client?: NexusTradeClient },
+): Promise<JsonObject> {
+  const client = options.client ?? NexusTradeClient.fromEnvironment();
+  return client.createPortfolio(portfolio, {
+    idempotencyKey: options.idempotencyKey,
+  });
+}

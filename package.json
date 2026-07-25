@@ -1,0 +1,51 @@
+{
+  "name": "nexustrade-sdk",
+  "version": "0.1.0",
+  "description": "Typed TypeScript SDK for NexusTrade portfolio authoring, backtesting, and optimization",
+  "license": "MIT",
+  "author": "Starks Technology",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/austin-starks/nexustrade-sdk-ts.git"
+  },
+  "homepage": "https://nexustrade.io",
+  "keywords": [
+    "nexustrade",
+    "trading",
+    "backtesting",
+    "algorithmic-trading",
+    "portfolio"
+  ],
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "tsc -p tsconfig.build.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/finalize-cjs.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.ts",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.7.3"
+  }
+}
