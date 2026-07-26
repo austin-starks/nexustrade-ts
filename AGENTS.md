@@ -217,6 +217,33 @@ Always parameterize with `?` rather than interpolating into the SQL string.
 Stream parts with `downloadLakeQueryPart` instead of materializing large results.
 </details>
 
+<details>
+<summary><b>Run an agent</b></summary>
+
+Agents are the one job kind that is NOT fire-and-poll. Three states —
+`pending_plan_approval`, `pending_action_approval`, `awaiting_user_input` — are
+ones the run cannot leave on its own, so the caller is the approver.
+
+```ts
+const run = await nt.createAgent("Find momentum names in the S&P 500", {
+  idempotencyKey: "momentum-scan-v1",
+});
+
+for await (const event of run) {
+  console.log(event.text);
+  if (event.needsApproval) await run.approve();   // or run.reject()
+  else if (event.needsInput) await run.say("focus on semis");
+}
+```
+
+Iterating waits. If you never answer a blocked run, iteration throws
+`agent_awaiting_input` rather than spinning silently — the run keeps going
+server-side, so reattach with `nt.attachAgent(run.id)`.
+
+Approving can place orders, so it needs the `trade` scope; everything else
+needs `write`. Agent runs are unavailable to `run_compute` sandbox code.
+</details>
+
 ## Errors
 
 All failures throw `NexusTradeApiError` with a stable `.status`, `.code`, and
@@ -240,7 +267,6 @@ Not in this SDK. Do not attempt to reach them through it:
 
 - **Screener** — MCP only.
 - **Live trading and order placement** — deliberately excluded.
-- **Agent runs** — the NexusTrade agent API is not exposed here yet.
 
 ## Verifying your work
 

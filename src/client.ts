@@ -6,6 +6,7 @@
  * or set NEXUSTRADE_API_KEY / NEXUSTRADE_API_BASE_URL.
  */
 
+import { AgentRun } from "./agent.ts";
 import { environmentValue, loadDotenvValues } from "./env.ts";
 import type {
   JobRequest,
@@ -48,17 +49,17 @@ const MAX_REDIRECTS = 5;
 // `status` for errors no HTTP status describes: the request never reached the
 // API, or it returned 2xx with an envelope the client could not use. Reporting
 // a literal 200 there would misattribute a 201 response.
-const NO_HTTP_STATUS = 0;
+export const NO_HTTP_STATUS = 0;
 
 // Polling defaults. Every NexusTrade job — backtest, optimization,
 // walk-forward, and any future operation kind — reports through the same
 // envelope, so one poller serves all of them. Kept in lockstep with the Python
 // SDK by checkSdkClientParity.ts; the backoff is deterministic (no jitter) so
 // both languages issue the identical request sequence.
-const DEFAULT_POLL_TIMEOUT_SECONDS = 900;
-const DEFAULT_POLL_INTERVAL_SECONDS = 2;
-const MAX_POLL_INTERVAL_SECONDS = 15;
-const POLL_BACKOFF_FACTOR = 1.5;
+export const DEFAULT_POLL_TIMEOUT_SECONDS = 900;
+export const DEFAULT_POLL_INTERVAL_SECONDS = 2;
+export const MAX_POLL_INTERVAL_SECONDS = 15;
+export const POLL_BACKOFF_FACTOR = 1.5;
 const TERMINAL_STATUSES = ["cancelled", "completed", "failed"];
 
 export class NexusTradeApiError extends Error {
@@ -590,6 +591,77 @@ export class NexusTradeClient {
       );
     }
     return operations[0];
+  }
+
+  /**
+   * Start an agent run and return an iterable handle.
+   *
+   * Unlike the other job kinds this is not fire-and-poll: iterate the run to
+   * receive its events, and answer it when it asks. See `AgentRun`.
+   */
+  async createAgent(
+    prompt: string,
+    options: { idempotencyKey: string; maxIterations?: number },
+  ): Promise<AgentRun> {
+    const body: JsonObject = { prompt };
+    if (options.maxIterations !== undefined) {
+      body.maxIterations = options.maxIterations;
+    }
+    const response = await this.transport.request("POST", "agents", {
+      body,
+      idempotencyKey: options.idempotencyKey,
+    });
+    const agent = response.agent;
+    if (!isJsonObject(agent) || !agent.id) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Agent response is missing agent.",
+      );
+    }
+    return new AgentRun(
+      String(agent.id),
+      this.transport,
+      typeof agent.status === "string" ? agent.status : "initializing",
+    );
+  }
+
+  /**
+   * Reattach to a run already in flight.
+   *
+   * The run lives server-side and bills whether or not anyone is listening, so
+   * a dropped connection must not orphan it. Omit `cursor` to replay from the
+   * beginning; events are durable, so replay is exact.
+   */
+  async attachAgent(
+    agentId: string,
+    options: { cursor?: string } = {},
+  ): Promise<AgentRun> {
+    const agent = await this.getAgent(agentId);
+    const run = new AgentRun(
+      typeof agent.id === "string" ? agent.id : agentId,
+      this.transport,
+      typeof agent.status === "string" ? agent.status : "initializing",
+    );
+    run.terminal = Boolean(agent.terminal);
+    run.setCursor(options.cursor ?? null);
+    return run;
+  }
+
+  async getAgent(agentId: string): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "GET",
+      `agents/${encodeURIComponent(agentId)}`,
+    );
+    const agent = response.agent;
+    if (!isJsonObject(agent)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Agent response is missing agent.",
+      );
+    }
+    return agent;
   }
 
   async getBacktest(backtestId: string): Promise<JsonObject> {

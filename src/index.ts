@@ -1,3 +1,5 @@
+export { AgentRun } from "./agent.js";
+export type { AgentEvent, AgentRunOptions } from "./agent.js";
 export {
   HttpTransport,
   NexusTradeApiError,
