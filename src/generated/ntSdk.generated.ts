@@ -44,7 +44,7 @@ export type PipelineStage =
  * assets to CRYPTO, both of which the real type forbids.
  */
 export type Universe =
-  | { source: "ALL_US_STOCKS" | "SP500" | "CRYPTO" }
+  | { source: "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" }
   | { source: "SPECIFIC_ASSETS"; assets: Asset[] };
 
 export interface Allocation { type: AllocationType; amount: number }
@@ -271,7 +271,7 @@ export type AssetType = "Stock" | "Cryptocurrency" | "Option" | "Other";
 export type Interval = "Day" | "Hour" | "Minute";
 export type Comparator = "lessThan" | "greaterThan" | "lessThanOrEqual" | "greaterThanOrEqual" | "equal" | "notEqual";
 export type SelectDirection = "Highest" | "Lowest";
-export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "CRYPTO" | "SPECIFIC_ASSETS";
+export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS";
 export type AllocationType = "percent of portfolio" | "percent of buying power" | "percent of current positions" | "dollars" | "number of assets";
 export type DepositWithdrawAllocationType = "percent of portfolio" | "percent of buying power" | "dollars";
 export type OptionAllocationType = "dollars" | "percent of portfolio" | "percent of buying power" | "contracts";
@@ -452,7 +452,7 @@ export const selectPercentile = (
   metric: Indicator, percentile: number, direction: SelectDirection = "Highest",
 ): PipelineStage => ({ type: "SelectPercentile", metric, percentile, direction });
 
-export function universe(source: "ALL_US_STOCKS" | "SP500" | "CRYPTO"): Universe;
+export function universe(source: "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO"): Universe;
 export function universe(source: "SPECIFIC_ASSETS", assets: AssetArg[]): Universe;
 export function universe(source: UniverseSource, assets?: AssetArg[]): Universe {
   if (source === "SPECIFIC_ASSETS") {
@@ -1094,7 +1094,7 @@ export function IsAssetType(asset: AssetArg, assetType: AssetType = "Stock"): In
  * @param asset Ticker name (ex. SPY, BTC)
  * @param index The index to check membership against
  */
-export function IsIndexMember(asset: AssetArg, index: "SP500" = "SP500"): Indicator {
+export function IsIndexMember(asset: AssetArg, index: "SP500" | "NASDAQ100" | "DJIA" = "SP500"): Indicator {
   const d: Record<string, unknown> = { type: "IsIndexMember" };
   setAsset(d, "targetAsset", asset);
   d["index"] = index;
