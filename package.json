@@ -1,12 +1,12 @@
 {
-  "name": "nexustrade-sdk",
+  "name": "nexustrade",
   "version": "0.1.0",
   "description": "Typed TypeScript SDK for NexusTrade portfolio authoring, backtesting, and optimization",
   "license": "MIT",
   "author": "Starks Technology",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/austin-starks/nexustrade-sdk-ts.git"
+    "url": "git+https://github.com/austin-starks/nexustrade-ts.git"
   },
   "homepage": "https://nexustrade.io",
   "keywords": [

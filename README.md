@@ -4,7 +4,7 @@ Typed portfolio authoring, backtesting, and optimization for
 [NexusTrade](https://nexustrade.io).
 
 ```bash
-npm install nexustrade-sdk
+npm install nexustrade
 ```
 
 Zero runtime dependencies. ESM and CommonJS builds ship together.
@@ -20,7 +20,7 @@ import {
   portfolio,
   stockAsset,
   strategy,
-} from "nexustrade-sdk";
+} from "nexustrade";
 
 const nt = new NexusTradeClient({
   apiKey: "sk-...",
@@ -200,7 +200,7 @@ and `message` decoded from the API's error envelope:
 ```
 
 ```ts
-import { NexusTradeApiError } from "nexustrade-sdk";
+import { NexusTradeApiError } from "nexustrade";
 
 try {
   await nt.createBacktest(handle, { idempotencyKey: "run-1" });
