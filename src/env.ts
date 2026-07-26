@@ -140,14 +140,42 @@ export function loadDotenvValues(start?: string): Record<string, string> {
   }
 }
 
+/**
+ * Reads the `.env` at most once, and only if something actually needs it.
+ *
+ * The file walk is skipped entirely when the environment already answers —
+ * which is always the case inside `run_compute`, where the platform injects the
+ * variables. Constructing a client should not stat up to 32 directories to
+ * discover a file it was never going to consult.
+ */
+export class LazyDotenv {
+  #values: Record<string, string> | null = null;
+  readonly #start?: string;
+
+  constructor(start?: string) {
+    this.#start = start;
+  }
+
+  get(name: string): string | undefined {
+    if (this.#values === null) this.#values = loadDotenvValues(this.#start);
+    return this.#values[name];
+  }
+
+  /** True once the file has actually been read. Used by tests. */
+  get loaded(): boolean {
+    return this.#values !== null;
+  }
+}
+
 /** `process.env` first, then `.env`. Blank is treated as absent. */
 export function environmentValue(
   name: string,
-  dotenv?: Record<string, string>,
+  dotenv?: LazyDotenv | Record<string, string>,
 ): string | undefined {
   const live = process.env[name];
   if (live && live.trim()) return live;
-  const values = dotenv ?? loadDotenvValues();
-  const fallback = values[name];
+  const source = dotenv ?? new LazyDotenv();
+  const fallback =
+    source instanceof LazyDotenv ? source.get(name) : source[name];
   return fallback && fallback.trim() ? fallback : undefined;
 }

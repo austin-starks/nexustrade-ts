@@ -7,7 +7,7 @@
  */
 
 import { AgentRun } from "./agent.ts";
-import { environmentValue, loadDotenvValues } from "./env.ts";
+import { LazyDotenv, environmentValue } from "./env.ts";
 import type {
   JobRequest,
   Portfolio,
@@ -510,9 +510,10 @@ export class NexusTradeClient {
       this.transport = options.transport;
       return;
     }
-    // Read the file once, so a two-variable lookup does not walk the tree
-    // twice and cannot see two different files mid-resolution.
-    const dotenv = loadDotenvValues();
+    // Lazy and memoized: the tree is walked at most once, and not at all when
+    // the environment already answers — which is always true inside
+    // run_compute, where the platform injects both variables.
+    const dotenv = new LazyDotenv();
     const apiKey =
       options.apiKey ?? environmentValue("NEXUSTRADE_API_KEY", dotenv);
     const baseUrl =

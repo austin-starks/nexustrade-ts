@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  LazyDotenv,
   dotenvDisabled,
   environmentValue,
   findDotenv,
@@ -162,5 +163,32 @@ describe("disable switch", () => {
         assert.equal(dotenvDisabled(), false);
       });
     }
+  });
+});
+
+describe("laziness", () => {
+  it("does not touch the filesystem when the environment answers", () => {
+    // run_compute always has both variables injected. Constructing a client
+    // there must not walk up to 32 directories looking for a file it will never
+    // consult.
+    const lazy = new LazyDotenv();
+    withEnv({ NEXUSTRADE_API_KEY: "sk-injected" }, () => {
+      assert.equal(environmentValue("NEXUSTRADE_API_KEY", lazy), "sk-injected");
+    });
+    assert.equal(lazy.loaded, false, "the .env must not have been read");
+  });
+
+  it("reads once and memoizes", () => {
+    const root = tempDir();
+    writeFileSync(join(root, ".env"), "A=1\nB=2\n");
+    const lazy = new LazyDotenv(root);
+    withEnv({ A: undefined, B: undefined }, () => {
+      assert.equal(lazy.get("A"), "1");
+      assert.equal(lazy.loaded, true);
+      writeFileSync(join(root, ".env"), "A=changed\n");
+      // Memoized: a second lookup must not re-read the file.
+      assert.equal(lazy.get("A"), "1");
+      assert.equal(lazy.get("B"), "2");
+    });
   });
 });
