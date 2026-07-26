@@ -106,10 +106,36 @@ rather than launching a second paid job.
 | `getBacktest` | Read a backtest operation |
 | `createOptimization` / `getOptimization` | Submit and read an optimization |
 | `createWalkForward` / `getWalkForward` | Submit and read a walk-forward study |
+| `createLakeQuery` / `getLakeQuery` / `cancelLakeQuery` | Submit, inspect, or cancel durable SQL |
+| `getLakeCatalog` / `describeLakeTable` | Discover server-resolved lake tables |
+| `getLakeQueryManifest` / `downloadLakeQueryPart` | Inspect and stream bounded Parquet results |
 
 Every builder is generated from the same indicator specification the NexusTrade
 engine runs, so an authored book is valid by construction rather than by
 convention. The Python SDK exposes the identical surface.
+
+Lake queries accept arbitrary read-only SQL against the server-resolved
+`lake.*` catalog. NexusTrade chooses a compatible backing engine for the
+referenced tables; where both sources exist, MotherDuck is primary and the
+authorized Tigris-backed table is the fallback. Caller SQL does not change:
+
+```ts
+const query = await nt.createLakeQuery(
+  {
+    query:
+      "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
+    params: ["AAPL"],
+    limits: { maxRows: 10_000 },
+  },
+  { idempotencyKey: "aapl-daily-v1" },
+);
+const finished = await nt.waitForLakeQuery(query.id as string);
+const manifest = await nt.getLakeQueryManifest(finished.id as string);
+```
+
+Results are durable Parquet parts rather than an implicitly materialized
+in-memory array. Use the manifest plus `downloadLakeQueryPart` to stream them
+within your own memory budget.
 
 ## Authentication
 
@@ -142,6 +168,7 @@ Give the key the scopes the calls need:
 | --- | --- |
 | `read` | `getBacktest`, `getOptimization`, `getWalkForward` |
 | `write` | `createPortfolio`, `createBacktest(s)`, `createOptimization`, `createWalkForward` |
+| `lake` | Lake catalog, SQL query lifecycle, manifests, and result parts |
 
 A key missing the scope gets `403 insufficient_scope`.
 
@@ -190,7 +217,7 @@ Codes you are most likely to see:
 | Status | Code | Meaning |
 | --- | --- | --- |
 | 401 | `invalid_token` | Missing, malformed, or expired key (or an OAuth JWT) |
-| 403 | `insufficient_scope` | Key lacks the `read`/`write` scope |
+| 403 | `insufficient_scope` | Key lacks the required `read`, `write`, or `lake` scope |
 | 400 | `invalid_request`, `invalid_portfolio` | Malformed input |
 | 400 | `invalid_idempotency_key` | Key must match `[A-Za-z0-9._:-]{1,160}` |
 | 409 | `idempotency_conflict` | Key reused with a different payload |
@@ -203,10 +230,11 @@ an `invalid_response` envelope check on an otherwise-successful reply.
 
 ## Scope
 
-Portfolio drafting, backtesting, optimization, and walk-forward studies. The
-SDK does **not** expose the NexusTrade market-data lake, the screener, or live
-trading — those have no public HTTP surface. Everything the SDK can reach is
-the six routes under `/api/v1/nexustrade`.
+Portfolio drafting, backtesting, optimization, walk-forward studies, and
+arbitrary read-only SQL over the NexusTrade market-data lake. The public SDK
+surface is versioned under `/api/v1/nexustrade`; the SDK base URL is therefore
+`https://nexustrade.io/api/v1`. The screener and live trading remain outside
+this SDK surface.
 
 ## Requirements
 
