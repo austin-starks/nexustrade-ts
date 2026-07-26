@@ -6,6 +6,12 @@
  * or set NEXUSTRADE_API_KEY / NEXUSTRADE_API_BASE_URL.
  */
 
+import { environmentValue, loadDotenvValues } from "./env.ts";
+import type {
+  JobRequest,
+  Portfolio,
+} from "./generated/ntSdk.generated.js";
+
 export type JsonValue =
   | string
   | number
@@ -15,6 +21,24 @@ export type JsonValue =
   | { [key: string]: JsonValue };
 
 export type JsonObject = { [key: string]: JsonValue };
+
+/**
+ * What a request body may be: the output of a generated builder, or a
+ * hand-written JSON literal.
+ *
+ * The builder types are `interface`s, and TypeScript does not give an interface
+ * the implicit index signature `JsonObject` requires — so a parameter typed
+ * `JsonObject` rejects `portfolio(...)` and `backtest(...)`, which is every
+ * documented entry point into this SDK. Naming both sides here keeps the
+ * signature self-describing instead of widening to bare `object`.
+ */
+export type PortfolioInput = Portfolio | JsonObject;
+export type JobInput = JobRequest | JsonObject;
+
+/** Boundary adapter: builder output is JSON by construction. */
+function asJsonObject(value: PortfolioInput | JobInput): JsonObject {
+  return value as JsonObject;
+}
 
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_ERROR_BYTES = 64 * 1024;
@@ -485,14 +509,21 @@ export class NexusTradeClient {
       this.transport = options.transport;
       return;
     }
-    const apiKey = options.apiKey ?? process.env.NEXUSTRADE_API_KEY;
-    const baseUrl = options.baseUrl ?? process.env.NEXUSTRADE_API_BASE_URL;
+    // Read the file once, so a two-variable lookup does not walk the tree
+    // twice and cannot see two different files mid-resolution.
+    const dotenv = loadDotenvValues();
+    const apiKey =
+      options.apiKey ?? environmentValue("NEXUSTRADE_API_KEY", dotenv);
+    const baseUrl =
+      options.baseUrl ?? environmentValue("NEXUSTRADE_API_BASE_URL", dotenv);
     if (!apiKey || !baseUrl) {
       throw new Error(
         "NexusTradeClient requires an API key. Create one at " +
           "https://nexustrade.io/developers, then either pass apiKey/baseUrl " +
           "or set NEXUSTRADE_API_KEY and NEXUSTRADE_API_BASE_URL " +
           "(base URL is https://nexustrade.io/api/v1). " +
+          "Both are also read from a .env file at or above the current " +
+          "directory; the real environment takes precedence. " +
           "OAuth tokens are not accepted by this API.",
       );
     }
@@ -504,11 +535,11 @@ export class NexusTradeClient {
   }
 
   async createPortfolio(
-    portfolio: JsonObject,
+    portfolio: PortfolioInput,
     options: { idempotencyKey: string },
   ): Promise<JsonObject> {
     const response = await this.transport.request("POST", "portfolios", {
-      body: portfolio,
+      body: asJsonObject(portfolio),
       idempotencyKey: options.idempotencyKey,
     });
     const result = response.portfolio;
@@ -523,10 +554,10 @@ export class NexusTradeClient {
   }
 
   async createBacktests(
-    backtests: ReadonlyArray<JsonObject>,
+    backtests: ReadonlyArray<JobInput>,
     options: { idempotencyKey: string },
   ): Promise<JsonObject[]> {
-    const inputs = backtests.map((item) => backtestInput(item));
+    const inputs = backtests.map((item) => backtestInput(asJsonObject(item)));
     const response = await this.transport.request("POST", "backtests/batch", {
       body: { backtests: inputs },
       idempotencyKey: options.idempotencyKey,
@@ -547,7 +578,7 @@ export class NexusTradeClient {
 
   /** Submit one generated `backtest(...)` handle or raw API input. */
   async createBacktest(
-    backtest: JsonObject,
+    backtest: JobInput,
     options: { idempotencyKey: string },
   ): Promise<JsonObject> {
     const operations = await this.createBacktests([backtest], options);
@@ -570,7 +601,7 @@ export class NexusTradeClient {
   }
 
   async createOptimization(
-    handle: JsonObject,
+    handle: JobInput,
     options: { idempotencyKey: string },
   ): Promise<JsonObject> {
     return this.createPortfolioJob(
@@ -589,7 +620,7 @@ export class NexusTradeClient {
   }
 
   async createWalkForward(
-    handle: JsonObject,
+    handle: JobInput,
     options: { idempotencyKey: string },
   ): Promise<JsonObject> {
     return this.createPortfolioJob(
@@ -745,9 +776,10 @@ export class NexusTradeClient {
 
   private async createPortfolioJob(
     path: string,
-    handle: JsonObject,
+    input: JobInput,
     idempotencyKey: string,
   ): Promise<JsonObject> {
+    const handle = asJsonObject(input);
     const args = handle.args;
     const response = await this.transport.request("POST", path, {
       body: {

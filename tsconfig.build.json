@@ -5,7 +5,10 @@
     "moduleResolution": "bundler",
     "outDir": "dist/esm",
     "rootDir": "src",
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
+    // Lets src import "./env.ts" so `node --test` resolves it from source;
+    // tsc rewrites the extension to .js on emit.
+    "rewriteRelativeImportExtensions": true,
     "noEmit": false,
     // `files` publishes dist only, so maps would point at sources that are not
     // in the tarball. Consumers get .d.ts; sources live in the public repo.

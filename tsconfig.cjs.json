@@ -5,7 +5,10 @@
     "moduleResolution": "node",
     "outDir": "dist/cjs",
     "rootDir": "src",
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
+    // Lets src import "./env.ts" so `node --test` resolves it from source;
+    // tsc rewrites the extension to .js on emit.
+    "rewriteRelativeImportExtensions": true,
     "noEmit": false,
     "declaration": false,
     "declarationMap": false,

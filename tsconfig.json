@@ -15,6 +15,7 @@
     // Tests import `../src/client.ts` so `node --test` can strip types with no
     // build step. Emitting configs turn this off.
     "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "noEmit": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
