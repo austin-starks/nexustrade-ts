@@ -1,25 +1,33 @@
+<div align="center">
+
+<img src="https://nexustrade.io/logo192.jpeg" alt="NexusTrade" width="88" height="88">
+
 # NexusTrade TypeScript SDK
 
-Typed portfolio authoring, backtesting, and optimization for
-[NexusTrade](https://nexustrade.io).
+**Author trading strategies in typed TypeScript. Backtest them on the engine that runs them live.**
+
+[![npm](https://img.shields.io/npm/v/nexustrade.svg)](https://www.npmjs.com/package/nexustrade)
+[![Node](https://img.shields.io/node/v/nexustrade.svg)](https://www.npmjs.com/package/nexustrade)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Deps](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](package.json)
+
+[Quickstart](#quickstart) · [Authoring](#authoring-strategies) · [Polling](#jobs-run-on-the-engine--you-poll) · [Lake SQL](#lake-sql) · [Auth](#authentication) · [Errors](#errors)
+
+</div>
+
+---
 
 ```bash
 npm install nexustrade
 ```
 
-Zero runtime dependencies. ESM and CommonJS builds ship together.
+**Zero runtime dependencies.** ESM and CommonJS builds ship together, with types.
 
 ## Quickstart
 
 ```ts
 import {
-  NexusTradeClient,
-  always,
-  backtest,
-  buy,
-  portfolio,
-  stockAsset,
-  strategy,
+  NexusTradeClient, always, backtest, buy, portfolio, stockAsset, strategy,
 } from "nexustrade";
 
 const nt = new NexusTradeClient({
@@ -31,99 +39,121 @@ const book = portfolio("Example", [
   strategy("Buy SPY", always(), buy(stockAsset("SPY"), 100)),
 ]);
 
-const saved = await nt.createPortfolio(book, {
-  idempotencyKey: "example-v1",
-});
-
 const operation = await nt.createBacktest(
   backtest(book, { startDate: "2024-01-01", endDate: "2024-12-31" }),
-  { idempotencyKey: "example-backtest-v1" },
+  { idempotencyKey: "example-v1" },
 );
-const result = await nt.getBacktest(operation.id as string);
+const result = await nt.waitForBacktest(operation.id as string);
+console.log(result.result);
 ```
 
-## Jobs are asynchronous — you poll
+## Authoring strategies
 
-Backtests, optimizations, and walk-forward studies run on the NexusTrade
-engine, not in your process. `create*` enqueues the job and resolves
-immediately; it does **not** wait for results. There are no webhooks today, so
-you poll `get*` until the operation reaches a terminal state.
+Every builder is generated from the same indicator specification the NexusTrade
+engine runs, so a book is **valid by construction** rather than by convention.
 
-Both calls return the same operation envelope:
+TypeScript cannot overload comparison operators, so indicators compose through
+`gt` / `gte` / `lt` / `lte` / `eq` / `neq` and `and` / `or`:
+
+```ts
+import * as nt from "nexustrade";
+
+const book = nt.portfolio("Momentum", [
+  nt.strategy(
+    "Rotate into strength",
+    nt.always(),
+    nt.dynamicRebalance({
+      universe: nt.universe("SP500"),
+      pipeline: [
+        nt.filter(nt.gt(nt.Price(nt.CANDIDATE), nt.SMA(nt.CANDIDATE, 200))),
+        nt.selectTop(nt.RSI(nt.CANDIDATE, 14), 10),
+      ],
+      weightIndicator: nt.RSI(nt.CANDIDATE, 14),
+      limit: 10,
+      deploymentPercent: 80,
+    }),
+  ),
+], { initialValue: 100_000 });
+```
+
+<details>
+<summary><b>What you can build</b> — 170+ generated builders</summary>
+
+| Group | Examples |
+| --- | --- |
+| **Price & volume** | `Price` `OpeningPrice` `HighOfDay` `VWAP` `Volume` `GapPercentage` |
+| **Technicals** | `SMA` `EMA` `RSI` `BollingerBand` `AverageTrueRange` `CrossAbove` |
+| **Position state** | `PositionValue` `PositionPercentChange` `PositionMaxDrawdown` |
+| **Portfolio state** | `PortfolioValue` `BuyingPower` `MaxDrawdown` `InitialValue` |
+| **Fundamentals** | `Fundamental` `Economic` `DaysUntilEarnings` `IsIndexMember` `IsIndustry` |
+| **Options** | `OptionDaysToExpiration` `OptionCollateral` `OptionUnrealizedPnL` `openOption` `closeOption` |
+| **Actions** | `buy` `sell` `deposit` `withdraw` `alert` `dynamicRebalance` `rebalanceOption` |
+| **Selection** | `filter` `selectTop` `selectPercentile` `universe` |
+| **Logic** | `always` `atLeast` `atMost` `exactly` `fewerThan` `multi` `and` `or` |
+
+Every builder is fully typed — your editor completes the whole surface.
+
+</details>
+
+## Jobs run on the engine — you poll
+
+`create*` enqueues work and returns immediately. It does **not** resolve when
+results exist. There are no webhooks today.
+
+Every job kind reports the same envelope, so one poller serves all of them:
 
 ```ts
 {
   id: "op_...",
-  kind: "backtest",            // backtest | optimization | walk_forward
-  status: "queued",            // queued | running | completed | failed | cancelled
-  result?: {...},              // present only once terminal
-  error?: { code, message, retryable },
+  kind: "backtest",          // backtest | optimization | walk_forward
+  status: "queued",          // queued | running | completed | failed | cancelled
+  result: {...},             // present only once terminal
+  error: { code, message, retryable },
 }
 ```
 
-`result` is absent while the job is `queued` or `running`. The client polls for
-you, on a deterministic backoff, until the operation is terminal:
-
 ```ts
 const finished = await nt.waitForBacktest(operation.id as string);
-console.log(finished.result);
 ```
-
-`waitForBacktest`, `waitForOptimization`, and `waitForWalkForward` all take the
-same options:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `timeoutSeconds` | `900` | Give up waiting (the job keeps running) |
-| `pollIntervalSeconds` | `2` | First interval; backs off 1.5x |
+| `pollIntervalSeconds` | `2` | First interval; backs off 1.5× |
 | `maxPollIntervalSeconds` | `15` | Interval ceiling |
-| `raiseOnFailure` | `true` | Reject on `failed`/`cancelled` instead of resolving |
+| `throwOnFailure` | `true` | Throw on `failed`/`cancelled` instead of returning |
 
-A failed operation rejects with `NexusTradeApiError` carrying the API's own
-error code; a timeout rejects with `operation_timeout` and does **not** cancel
-the job — call the waiter again with the same id rather than resubmitting. Pass
-`raiseOnFailure: false` to inspect the terminal envelope yourself.
+A timeout throws `operation_timeout` and does **not** cancel the job — call the
+waiter again with the same id rather than resubmitting.
 
-For a batch, `waitForBacktests(operations)` waits on each in submission order.
-And `waitForOperation(fetch, id)` is the same poller exposed directly, for any
-operation kind.
+**Batches.** `createBacktests` submits many in one request and returns one
+operation each; `waitForBacktests(operations)` waits on all of them. Prefer it
+over a loop: one request, one idempotency key, one rate-limit slot.
 
-`createBacktests` submits a batch in one call and returns one operation per
-backtest — poll each `id` independently. Prefer it over a loop of
-`createBacktest` when you have several: one request, one idempotency key, one
-rate-limit slot.
+**Optimization and walk-forward** follow the identical shape:
 
-**Idempotency keys make retries free.** If a `create*` call fails at the
-transport layer, retrying with the *same* key returns the original operation
-rather than launching a second paid job.
+```ts
+const study = await nt.createWalkForward(
+  nt.walkForward(book, {
+    globalStartDate: "2022-01-01",
+    globalEndDate: "2024-12-31",
+    foldCount: 4,
+  }),
+  { idempotencyKey: "wf-v1" },
+);
+await nt.waitForWalkForward(study.id as string);
+```
 
-## What the client covers
+## Lake SQL
 
-| Method | Purpose |
-| --- | --- |
-| `createPortfolio` | Persist an authored portfolio |
-| `createBacktest` / `createBacktests` | Submit one or many backtests |
-| `getBacktest` | Read a backtest operation |
-| `createOptimization` / `getOptimization` | Submit and read an optimization |
-| `createWalkForward` / `getWalkForward` | Submit and read a walk-forward study |
-| `createLakeQuery` / `getLakeQuery` / `cancelLakeQuery` | Submit, inspect, or cancel durable SQL |
-| `getLakeCatalog` / `describeLakeTable` | Discover server-resolved lake tables |
-| `getLakeQueryManifest` / `downloadLakeQueryPart` | Inspect and stream bounded Parquet results |
-
-Every builder is generated from the same indicator specification the NexusTrade
-engine runs, so an authored book is valid by construction rather than by
-convention. The Python SDK exposes the identical surface.
-
-Lake queries accept arbitrary read-only SQL against the server-resolved
-`lake.*` catalog. NexusTrade chooses a compatible backing engine for the
-referenced tables; where both sources exist, MotherDuck is primary and the
-authorized Tigris-backed table is the fallback. Caller SQL does not change:
+Read-only SQL over the NexusTrade market-data lake, against the server-resolved
+`lake.*` catalog. Results are durable Parquet parts rather than an implicitly
+materialized in-memory array.
 
 ```ts
 const query = await nt.createLakeQuery(
   {
-    query:
-      "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
+    query: "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
     params: ["AAPL"],
     limits: { maxRows: 10_000 },
   },
@@ -133,71 +163,70 @@ const finished = await nt.waitForLakeQuery(query.id as string);
 const manifest = await nt.getLakeQueryManifest(finished.id as string);
 ```
 
-Results are durable Parquet parts rather than an implicitly materialized
-in-memory array. Use the manifest plus `downloadLakeQueryPart` to stream them
-within your own memory budget.
+Use the manifest plus `downloadLakeQueryPart` to stream results within your own
+memory budget. NexusTrade picks a compatible backing engine for the referenced
+tables; your SQL does not change when it does.
+
+> The Python SDK additionally ships `nt.lake.sql(...)`, a DuckDB/pandas
+> convenience layer over these same endpoints.
 
 ## Authentication
 
-**Get a key at [nexustrade.io/developers](https://nexustrade.io/developers)**
-(also under Profile → API Keys). Keys begin with `sk-` and are shown once at
-creation, so store it immediately.
+Create a key at **[nexustrade.io/developers](https://nexustrade.io/developers)**
+(Profile → API Keys). Keys start with `sk-` and are shown once.
 
 ```ts
 const nt = new NexusTradeClient({
   apiKey: "sk-...",
   baseUrl: "https://nexustrade.io/api/v1",
 });
+// or set NEXUSTRADE_API_KEY / NEXUSTRADE_API_BASE_URL and:
+const fromEnv = new NexusTradeClient();
 ```
 
-Or set `NEXUSTRADE_API_KEY` and `NEXUSTRADE_API_BASE_URL` and call
-`NexusTradeClient.fromEnvironment()`.
+Both variables are also read from a **`.env` file** at or above the current
+directory, so a local project works with no exports, no `dotenv` dependency, and
+no `--env-file` flag:
 
-The client sends `Authorization: Bearer sk-...` over HTTPS. Plain HTTP is
-rejected except on loopback, and the client refuses to follow a cross-origin
-redirect so the credential cannot be replayed to another host. It also refuses
-to follow a redirect on any non-GET request, so a redirect can never re-submit
-a paid job. Never ship a key
-in browser code — it carries full account authority.
+```bash
+# .env
+NEXUSTRADE_API_KEY=sk-...
+NEXUSTRADE_API_BASE_URL=https://nexustrade.io/api/v1
+```
 
-### Scopes
+The real environment always wins — a `.env` value is used only when the variable
+is absent, so a stale file can never override what you exported. Nothing is
+written back to `process.env`. Opt out with `NEXUSTRADE_DISABLE_DOTENV=1`.
 
-Give the key the scopes the calls need:
-
-| Scope | Needed for |
+| Scope | Grants |
 | --- | --- |
 | `read` | `getBacktest`, `getOptimization`, `getWalkForward` |
 | `write` | `createPortfolio`, `createBacktest(s)`, `createOptimization`, `createWalkForward` |
-| `lake` | Lake catalog, SQL query lifecycle, manifests, and result parts |
+| `lake` | Lake catalog, query lifecycle, manifests, result parts |
 
 A key missing the scope gets `403 insufficient_scope`.
 
-### OAuth is not supported here
+> **OAuth is not accepted here.** NexusTrade's OAuth flow serves the MCP server.
+> These endpoints take `sk-` API keys only; a bearer JWT is rejected with
+> `401 invalid_token`.
 
-NexusTrade's OAuth flow exists for the MCP server, not for this API. The SDK
-endpoints accept **only** `sk-` API keys — an OAuth bearer JWT is rejected with
-`401 invalid_token`. Use an API key.
-
-## Timeouts
-
-`new HttpTransport({ timeoutSeconds })` (default 30) aborts the request after a
-total wall-clock deadline covering redirects and body read. The Python SDK's
-equivalent is a per-socket-operation timeout. Neither bounds how long a *job*
-takes — that is what the polling loop above is for.
+**Transport hardening.** HTTPS is required (except loopback). The client refuses
+cross-origin redirects, so the credential cannot be replayed to another host, and
+refuses to follow a redirect on any non-GET request, so a redirect can never
+re-submit a paid job. The key is held in a `#private` field and never appears in
+a stringified client.
 
 ## Idempotency
 
-Mutation calls require an idempotency key. Reusing the same key with the same
-request returns the original resource instead of launching another paid job.
+Every mutation takes a key. Reusing the same key with the same request returns
+the original resource instead of launching a second paid job — so a retry after
+a network failure is free.
+
+```ts
+await nt.createBacktest(handle, { idempotencyKey: "momentum-2024-v1" });
+```
 
 ## Errors
-
-Failures reject with `NexusTradeApiError`, carrying a stable `status`, `code`,
-and `message` decoded from the API's error envelope:
-
-```json
-{ "error": { "code": "invalid_request", "message": "..." } }
-```
 
 ```ts
 import { NexusTradeApiError } from "nexustrade";
@@ -206,43 +235,48 @@ try {
   await nt.createBacktest(handle, { idempotencyKey: "run-1" });
 } catch (error) {
   if (error instanceof NexusTradeApiError && error.code === "rate_limit_exceeded") {
-    // back off and retry
+    // back off
   }
   throw error;
 }
 ```
 
-Codes you are most likely to see:
-
 | Status | Code | Meaning |
 | --- | --- | --- |
 | 401 | `invalid_token` | Missing, malformed, or expired key (or an OAuth JWT) |
-| 403 | `insufficient_scope` | Key lacks the required `read`, `write`, or `lake` scope |
+| 403 | `insufficient_scope` | Key lacks `read`, `write`, or `lake` |
 | 400 | `invalid_request`, `invalid_portfolio` | Malformed input |
-| 400 | `invalid_idempotency_key` | Key must match `[A-Za-z0-9._:-]{1,160}` |
+| 400 | `invalid_idempotency_key` | Must match `[A-Za-z0-9._:-]{1,160}` |
 | 409 | `idempotency_conflict` | Key reused with a different payload |
-| 404 | `not_found`, `operation_not_found` | Unknown or not-yours resource |
+| 404 | `not_found`, `operation_not_found` | Unknown or not yours |
 | 429 | `rate_limit_exceeded` | Back off and retry |
 
 `status` is `0` when no HTTP status describes the failure: `transport_error`
-(the request never reached the API — DNS, TLS, timeout), `unsafe_redirect`, or
-an `invalid_response` envelope check on an otherwise-successful reply.
+(never reached the API), `unsafe_redirect`, or an `invalid_response` envelope
+check on an otherwise-successful reply.
+
+## Timeouts
+
+`new HttpTransport({ timeoutSeconds })` (default 30) is a total wall-clock
+deadline for one request. Neither it nor the poll timeout bounds how long a
+*job* takes.
 
 ## Scope
 
 Portfolio drafting, backtesting, optimization, walk-forward studies, and
-arbitrary read-only SQL over the NexusTrade market-data lake. The public SDK
-surface is versioned under `/api/v1/nexustrade`; the SDK base URL is therefore
-`https://nexustrade.io/api/v1`. The screener and live trading remain outside
-this SDK surface.
+read-only SQL over the market-data lake, versioned under `/api/v1/nexustrade`.
+The screener and live trading remain outside this surface.
 
 ## Requirements
 
-Node 18+ (uses the global `fetch`).
+Node 18+ (uses the global `fetch`). Contributing: the test suite runs TypeScript
+directly via `node --test`, which needs Node 22.6+ for type stripping. The
+published `dist/` is plain JavaScript and has no such requirement.
 
-Contributing: the test suite runs TypeScript directly via `node --test`, which
-needs Node 22.6+ for type stripping. The published `dist/` is plain JavaScript
-and has no such requirement.
+## Using this SDK with a coding agent
+
+See **[AGENTS.md](AGENTS.md)** — the conventions, invariants, and recipes an
+agent needs to write correct NexusTrade strategies on the first pass.
 
 ## License
 

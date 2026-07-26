@@ -30,6 +30,8 @@
   "files": [
     "dist",
     "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
     "LICENSE"
   ],
   "engines": {

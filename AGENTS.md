@@ -1,0 +1,256 @@
+# AGENTS.md — NexusTrade TypeScript SDK
+
+Instructions for coding agents (Claude Code, Cursor, Codex, and friends) writing
+NexusTrade strategies with this package. Humans: [README.md](README.md) is the
+friendlier read.
+
+## What this package is
+
+A typed client plus ~170 **generated** builders for authoring trading
+strategies. The builders are generated from the same indicator specification the
+NexusTrade engine executes, so a book assembled from them is structurally valid
+before it ever leaves the process.
+
+```
+author a portfolio  →  submit a job  →  poll until terminal  →  read result
+```
+
+## Setup
+
+```bash
+npm install nexustrade
+export NEXUSTRADE_API_KEY=sk-...
+export NEXUSTRADE_API_BASE_URL=https://nexustrade.io/api/v1
+```
+
+```ts
+import { NexusTradeClient } from "nexustrade";
+const nt = new NexusTradeClient();   // reads the environment
+```
+
+Keys come from https://nexustrade.io/developers. Never hardcode one into a file
+you write; read it from the environment. Node 18+.
+
+## Rules that matter
+
+**1. Use the builders. Never hand-write the JSON.**
+
+```ts
+// Right — validated shape, correct wire names
+nt.buy(nt.stockAsset("SPY"), 100);
+
+// Wrong — silently diverges from the engine's schema
+{ type: "Buy", targetAsset: { symbol: "SPY" }, amount: 100 };
+```
+
+The client accepts both a builder result and a plain object, so a wrong literal
+will typecheck. Prefer the builder.
+
+**2. Comparisons are functions, not operators.**
+
+TypeScript cannot overload `>`, so indicator comparisons go through helpers.
+This is the single most common mistake in this SDK.
+
+```ts
+// Right
+nt.filter(nt.gt(nt.Price(nt.CANDIDATE), nt.SMA(nt.CANDIDATE, 200)));
+
+// Wrong — compares object references, always nonsense
+nt.filter(nt.Price(nt.CANDIDATE) > nt.SMA(nt.CANDIDATE, 200));
+```
+
+Available: `gt` `gte` `lt` `lte` `eq` `neq`, combined with `and` / `or`.
+
+**3. Every mutation needs an idempotency key, and it must be deterministic.**
+
+Jobs cost money. A retry with the *same* key returns the original operation; a
+retry with a new key launches a second paid job.
+
+```ts
+// Right — same logical run reuses the key across retries
+await nt.createBacktest(handle, { idempotencyKey: "momentum-2024-v1" });
+
+// Wrong — every retry is a new billable job
+await nt.createBacktest(handle, { idempotencyKey: `run-${Date.now()}` });
+```
+
+Reusing a key with a *different* payload is a `409 idempotency_conflict`. Version
+the key when the request changes: `momentum-2024-v2`.
+
+**4. `create*` does not wait. Poll.**
+
+```ts
+const operation = await nt.createBacktest(handle, { idempotencyKey: "k" });
+// operation.result is ABSENT here — the job has not run yet.
+const finished = await nt.waitForBacktest(operation.id as string);
+console.log(finished.result);
+```
+
+A timeout does not cancel the job. Call the waiter again with the same id;
+do not resubmit.
+
+**5. Batch when you have several.**
+
+```ts
+const operations = await nt.createBacktests([h1, h2, h3], {
+  idempotencyKey: "sweep-v1",
+});
+const results = await nt.waitForBacktests(operations);
+```
+
+One request, one key, one rate-limit slot — instead of three of each.
+
+**6. Percent semantics.** `buy(asset, 100)` is **100% of portfolio**, not 100
+shares. Deployment and allocation parameters are percentages unless a builder
+says otherwise.
+
+**7. Credentials come from the environment, or a `.env` file.** Both
+`NEXUSTRADE_API_KEY` and `NEXUSTRADE_API_BASE_URL` are read from `process.env`
+first, then from a `.env` at or above the working directory — no `dotenv`
+dependency and no `--env-file` needed. Never hardcode a key into a file you
+write, and never log one. Exported values win over the file.
+
+**8. Responses are `JsonObject`.** Fields come back typed as `JsonValue`, so
+narrow before use (`operation.id as string`). This is deliberate: the envelope is
+whatever the API returned, not a promise the SDK can statically make.
+
+## Recipes
+
+<details open>
+<summary><b>Buy and hold</b></summary>
+
+```ts
+import * as nt from "nexustrade";
+
+const book = nt.portfolio("Buy and hold SPY", [
+  nt.strategy("Buy", nt.always(), nt.buy(nt.stockAsset("SPY"), 100)),
+]);
+```
+</details>
+
+<details>
+<summary><b>Condition on an indicator</b></summary>
+
+```ts
+const aapl = nt.stockAsset("AAPL");
+const oversold = nt.lt(nt.RSI(aapl, 14), 30);
+
+const book = nt.portfolio("Dip buyer", [
+  nt.strategy("Buy the dip", oversold, nt.buy(aapl, 25)),
+  nt.strategy(
+    "Take profit",
+    nt.gt(nt.PositionPercentChange(aapl), 10),
+    nt.sell(aapl, 100),
+  ),
+]);
+```
+
+Combine with `nt.and`, `nt.or`, `nt.atLeast`, `nt.atMost`, `nt.exactly`.
+</details>
+
+<details>
+<summary><b>Rank and rotate a universe</b></summary>
+
+`CANDIDATE` is the placeholder for "each name being evaluated". Use it inside a
+pipeline; use a concrete asset outside one.
+
+```ts
+const book = nt.portfolio("Momentum", [
+  nt.strategy("Rotate", nt.always(), nt.dynamicRebalance({
+    universe: nt.universe("SP500"),
+    pipeline: [
+      nt.filter(nt.gt(nt.Price(nt.CANDIDATE), nt.SMA(nt.CANDIDATE, 200))),
+      nt.selectTop(nt.RSI(nt.CANDIDATE, 14), 10),
+    ],
+    weightIndicator: nt.RSI(nt.CANDIDATE, 14),
+    limit: 10,
+    deploymentPercent: 80,
+  })),
+], { initialValue: 100_000 });
+```
+
+Note the key is `universe`, not `universeConfig` (the Python SDK spells it
+`universe_config`). `deploymentPercent: 80` invests 80% of the portfolio across
+the selection and leaves the rest in cash — a **total** cap, not per-name.
+</details>
+
+<details>
+<summary><b>Backtest, optimize, walk forward</b></summary>
+
+```ts
+const bt = nt.backtest(book, { startDate: "2024-01-01", endDate: "2024-12-31" });
+
+const opt = nt.optimization(book, {
+  startDate: "2022-01-01",
+  endDate: "2024-12-31",
+});
+
+const wf = nt.walkForward(book, {
+  globalStartDate: "2022-01-01",
+  globalEndDate: "2024-12-31",
+  foldCount: 4,
+});
+```
+
+Walk-forward uses `globalStartDate` / `globalEndDate` / `foldCount`, not
+`startDate` / `endDate`. Each handle goes to its matching `create*` + `waitFor*`
+pair.
+</details>
+
+<details>
+<summary><b>Query the data lake</b></summary>
+
+```ts
+const query = await nt.createLakeQuery(
+  {
+    query: "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
+    params: ["AAPL"],
+    limits: { maxRows: 10_000 },
+  },
+  { idempotencyKey: "aapl-daily-v1" },
+);
+const finished = await nt.waitForLakeQuery(query.id as string);
+const manifest = await nt.getLakeQueryManifest(finished.id as string);
+```
+
+Always parameterize with `?` rather than interpolating into the SQL string.
+Stream parts with `downloadLakeQueryPart` instead of materializing large results.
+</details>
+
+## Errors
+
+All failures throw `NexusTradeApiError` with a stable `.status`, `.code`, and
+`.message`. Branch on `.code`, never on message text.
+
+| Code | What to do |
+| --- | --- |
+| `invalid_token` | Key missing/expired, or an OAuth JWT was used. Only `sk-` keys work here. |
+| `insufficient_scope` | The key lacks `read` / `write` / `lake`. Do not retry. |
+| `invalid_portfolio` | The book is malformed — fix the builders, do not retry as-is. |
+| `idempotency_conflict` | Same key, different payload. Version the key. |
+| `rate_limit_exceeded` | Back off and retry. |
+| `operation_timeout` | Job still running. Re-poll the same id; never resubmit. |
+
+`status === 0` means no HTTP status applies: the request never reached the API
+(`transport_error`), or the reply failed an envelope check.
+
+## Out of scope
+
+Not in this SDK. Do not attempt to reach them through it:
+
+- **Screener** — MCP only.
+- **Live trading and order placement** — deliberately excluded.
+- **Agent runs** — the NexusTrade agent API is not exposed here yet.
+
+## Verifying your work
+
+```ts
+// Assemble the book and inspect the JSON before spending money on a backtest.
+console.log(JSON.stringify(book, null, 2));
+```
+
+If you are editing this repository rather than consuming it:
+
+```bash
+npm run typecheck && npm test
+```
