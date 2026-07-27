@@ -52,10 +52,13 @@ const CASES_PATH = join(
 );
 const NO_BODY_METHODS = new Set([
   "get_backtest",
+  "get_brokerage",
   "get_custom_indicator",
   "get_optimization",
   "get_walk_forward",
 ]);
+// Methods that take no positional argument at all; the fixture's `input` is null.
+const NO_ARG_METHODS = new Set(["list_brokerages"]);
 // Pollers take a wait-options bag, not an idempotency key. Zero interval so
 // the fixture pins the REQUEST SEQUENCE without spending its cadence in
 // wall-clock time.
@@ -111,6 +114,9 @@ function invoke(
   );
   const call = method as (...args: unknown[]) => Promise<JsonValue>;
   const leading = testCase.args ?? [];
+  if (NO_ARG_METHODS.has(testCase.method)) {
+    return call.call(client);
+  }
   if (WAIT_METHODS.has(testCase.method)) {
     return call.call(client, ...leading, testCase.input, {
       pollIntervalSeconds: 0,

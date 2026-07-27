@@ -95,6 +95,24 @@ export const MAX_POLL_INTERVAL_SECONDS = 15;
 export const POLL_BACKOFF_FACTOR = 1.5;
 const TERMINAL_STATUSES = ["cancelled", "completed", "failed"];
 
+// Connecting a brokerage is a human opening a browser. Long enough for that,
+// short enough that a forgotten terminal does not hang all afternoon.
+export const DEFAULT_CONNECT_TIMEOUT_SECONDS = 300;
+export const CONNECT_POLL_INTERVAL_SECONDS = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Whether a human is plausibly watching. Never throws on odd streams. */
+function stdoutIsInteractive(): boolean {
+  try {
+    return process.stdout.isTTY === true;
+  } catch {
+    return false;
+  }
+}
+
 // Point batches larger than this are uploaded rather than sent inline.
 const MAX_INLINE_POINT_BYTES = 512 * 1024;
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -1170,6 +1188,135 @@ export class NexusTradeClient {
       await this.completeCustomIndicatorUpload(customIndicatorId, jobId);
     }
     return this.waitForCustomIndicatorUpload(customIndicatorId, jobId);
+  }
+
+  /**
+   * Every connectable brokerage and whether this account has linked it.
+   *
+   * Reports all of them, connected or not, each with a `connectUrl` — an empty
+   * result would say nothing about what to do next.
+   */
+  async listBrokerages(): Promise<JsonObject[]> {
+    const response = await this.transport.request("GET", "brokerages");
+    const brokerages = response.brokerages;
+    if (!Array.isArray(brokerages)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Brokerage response is missing brokerages.",
+      );
+    }
+    return brokerages.filter((row): row is JsonObject => isJsonObject(row));
+  }
+
+  /** Whether one named brokerage is connected. */
+  async getBrokerage(brokerage: string): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "GET",
+      `brokerages/${encodePathSegment(brokerage)}`,
+    );
+    const result = response.brokerage;
+    if (!isJsonObject(result)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Brokerage response is missing brokerage.",
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Resolve once the brokerage is connected, logging where to connect it.
+   *
+   * Linking a brokerage is an OAuth redirect, so an API key cannot complete it
+   * — a human has to open the URL. What this does is make that unmissable and
+   * then wait for it.
+   *
+   * `wait` defaults to whether stdout is a TTY. Interactively it logs the URL
+   * and polls until the link appears. Non-interactively — CI, cron, a piped
+   * script — it rejects with `brokerage_not_connected` at once rather than
+   * stalling for the timeout in front of nobody. Pass `wait` to override.
+   */
+  async connectBrokerage(
+    brokerage: string,
+    options: {
+      wait?: boolean;
+      timeoutSeconds?: number;
+      pollIntervalSeconds?: number;
+    } = {},
+  ): Promise<JsonObject> {
+    let current = await this.getBrokerage(brokerage);
+    if (current.connected === true) return current;
+
+    const connectUrl = String(current.connectUrl ?? "");
+    const message =
+      `${brokerage} is not connected. Connect it at ${connectUrl} — ` +
+      "linking a brokerage is a browser flow an API key cannot complete.";
+    const shouldWait = options.wait ?? stdoutIsInteractive();
+    if (!shouldWait) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "brokerage_not_connected",
+        message,
+      );
+    }
+
+    const timeoutSeconds =
+      options.timeoutSeconds ?? DEFAULT_CONNECT_TIMEOUT_SECONDS;
+    const pollSeconds =
+      options.pollIntervalSeconds ?? CONNECT_POLL_INTERVAL_SECONDS;
+    console.log(message);
+    console.log(`Waiting for ${brokerage} to be connected…`);
+    const deadline = Date.now() + timeoutSeconds * 1000;
+    for (;;) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw new NexusTradeApiError(
+          NO_HTTP_STATUS,
+          "brokerage_not_connected",
+          `${brokerage} was still not connected after ${timeoutSeconds}s. ${message}`,
+        );
+      }
+      await sleep(Math.min(pollSeconds * 1000, remaining));
+      current = await this.getBrokerage(brokerage);
+      if (current.connected === true) {
+        console.log(`${brokerage} connected.`);
+        return current;
+      }
+    }
+  }
+
+  /**
+   * Stage orders against a portfolio.
+   *
+   * **Paper orders are accepted immediately. Live orders are staged for
+   * approval and are never sent to a broker by this call.** A live response
+   * carries `requiresApproval: true` and an `approvalUrl`; nothing has traded
+   * until a human approves it there. No argument changes that.
+   *
+   * ```ts
+   * const result = await client.createOrders(
+   *   portfolioId,
+   *   [{ asset: { name: "SPY", type: "STOCK", symbol: "SPY" },
+   *      side: "BUY", quantity: 10, orderType: "MARKET" }],
+   *   { idempotencyKey: "rebalance-2024-04-01" },
+   * );
+   * if (result.requiresApproval) console.log("approve at", result.approvalUrl);
+   * ```
+   */
+  async createOrders(
+    portfolioId: string,
+    orders: ReadonlyArray<JsonObject>,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    if (!Array.isArray(orders) || orders.length === 0) {
+      throw new Error("createOrders needs at least one order.");
+    }
+    return this.transport.request("POST", "orders", {
+      body: { portfolioId, orders: orders.map((order) => ({ ...order })) },
+      idempotencyKey: options.idempotencyKey,
+    });
   }
 
   async createBacktests(
