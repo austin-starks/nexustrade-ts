@@ -108,6 +108,21 @@ export class AgentRun {
     this.#cursor = cursor;
   }
 
+  /** Re-read status without consuming events. */
+  async refresh(): Promise<string> {
+    const response = await this.#transport.request(
+      "GET",
+      `agents/${encodeURIComponent(this.id)}`,
+    );
+    const agent = response.agent;
+    if (agent && typeof agent === "object" && !Array.isArray(agent)) {
+      const status = (agent as JsonObject).status;
+      if (typeof status === "string") this.status = status;
+      this.terminal = Boolean((agent as JsonObject).terminal);
+    }
+    return this.status;
+  }
+
   /**
    * Yield events until the run is terminal.
    *

@@ -12,6 +12,12 @@ import type {
   JobRequest,
   Portfolio,
 } from "./generated/ntSdk.generated.js";
+import {
+  PortfolioHandle,
+  type DeployResult,
+  type PortfolioListResult,
+  portfolioHandleFromWire,
+} from "./portfolio.ts";
 
 export type JsonValue =
   | string
@@ -38,7 +44,35 @@ export type JobInput = JobRequest | JsonObject;
 
 /** Boundary adapter: builder output is JSON by construction. */
 function asJsonObject(value: PortfolioInput | JobInput): JsonObject {
+  // PortfolioHandle.toJSON() omits `id`; a bare cast would leak it.
+  if (value && typeof value === "object" && "toJSON" in value) {
+    const candidate = value as { toJSON?: unknown };
+    if (typeof candidate.toJSON === "function") {
+      return (candidate.toJSON as () => JsonObject)();
+    }
+  }
   return value as JsonObject;
+}
+
+export interface ListPortfoliosOptions {
+  portfolioIds?: string[];
+  includeInactive?: boolean;
+  includePaper?: boolean;
+  includeLive?: boolean;
+  includeChatPortfolios?: boolean;
+  includePositions?: boolean;
+  search?: string;
+  limit?: number;
+  page?: number;
+}
+
+function encodeQuery(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") search.set(key, value);
+  }
+  const encoded = search.toString();
+  return encoded ? `?${encoded}` : "";
 }
 
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
@@ -555,6 +589,132 @@ export class NexusTradeClient {
     return result;
   }
 
+  /**
+   * List portfolios. Mirrors MCP `fetch_portfolios` (boolean includes, page/limit).
+   * `includePositions` defaults off when `search` is set.
+   */
+  async listPortfolios(
+    options: ListPortfoliosOptions = {},
+  ): Promise<PortfolioListResult> {
+    const query = encodeQuery({
+      portfolioIds: options.portfolioIds?.join(","),
+      includeInactive:
+        options.includeInactive === undefined
+          ? undefined
+          : String(options.includeInactive),
+      includePaper:
+        options.includePaper === undefined
+          ? undefined
+          : String(options.includePaper),
+      includeLive:
+        options.includeLive === undefined
+          ? undefined
+          : String(options.includeLive),
+      includeChatPortfolios:
+        options.includeChatPortfolios === undefined
+          ? undefined
+          : String(options.includeChatPortfolios),
+      includePositions:
+        options.includePositions === undefined
+          ? undefined
+          : String(options.includePositions),
+      search: options.search,
+      limit:
+        options.limit === undefined ? undefined : String(options.limit),
+      page: options.page === undefined ? undefined : String(options.page),
+    });
+    const response = await this.transport.request("GET", `portfolios${query}`);
+    const rows = response.portfolios;
+    if (!Array.isArray(rows)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Portfolio list response is missing portfolios.",
+      );
+    }
+    return {
+      portfolios: rows.map((row) =>
+        portfolioHandleFromWire(row, { transport: this.transport }),
+      ),
+      page: typeof response.page === "number" ? response.page : 1,
+      limit: typeof response.limit === "number" ? response.limit : 20,
+      total: typeof response.total === "number" ? response.total : rows.length,
+      totalPages:
+        typeof response.totalPages === "number" ? response.totalPages : 1,
+      scopes: isJsonObject(response.scopes) ? response.scopes : undefined,
+    };
+  }
+
+  async getPortfolio(portfolioId: string): Promise<PortfolioHandle> {
+    const response = await this.transport.request(
+      "GET",
+      `portfolios/${encodePathSegment(portfolioId)}`,
+    );
+    const portfolio = response.portfolio;
+    if (!isJsonObject(portfolio)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Portfolio response is missing portfolio.",
+      );
+    }
+    return portfolioHandleFromWire(portfolio, {
+      transport: this.transport,
+    });
+  }
+
+  /** Mint/activate a paper portfolio from a chat draft (or re-activate). */
+  async deploy(
+    portfolioId: string,
+    options: { frequency?: string } = {},
+  ): Promise<DeployResult> {
+    const body: JsonObject = {};
+    if (options.frequency !== undefined) body.frequency = options.frequency;
+    const response = await this.transport.request(
+      "POST",
+      `portfolios/${encodePathSegment(portfolioId)}/deploy`,
+      { body },
+    );
+    const result = response.deployment ?? response;
+    if (!isJsonObject(result) || typeof result.portfolioId !== "string") {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Deploy response is missing portfolioId.",
+      );
+    }
+    return {
+      portfolioId: String(result.portfolioId),
+      chatPortfolioId:
+        typeof result.chatPortfolioId === "string"
+          ? result.chatPortfolioId
+          : undefined,
+      name: typeof result.name === "string" ? result.name : "",
+      outcome: typeof result.outcome === "string" ? result.outcome : "",
+      deploymentType:
+        typeof result.deploymentType === "string"
+          ? result.deploymentType
+          : undefined,
+    };
+  }
+
+  async undeploy(portfolioId: string): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "POST",
+      `portfolios/${encodePathSegment(portfolioId)}/undeploy`,
+      { body: {} },
+    );
+    const result = response.undeployment ?? response;
+    if (!isJsonObject(result)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Undeploy response is missing body.",
+      );
+    }
+    return result;
+  }
+
   async createBacktests(
     backtests: ReadonlyArray<JobInput>,
     options: { idempotencyKey: string },
@@ -868,6 +1028,11 @@ export class NexusTradeClient {
 function backtestInput(item: JsonObject): JsonObject {
   const tool = item.tool;
   if (tool === undefined || tool === null) {
+    // Prefer portfolioId over an inline body when both are present.
+    if (typeof item.portfolioId === "string" && item.portfolioId) {
+      const { portfolio: _ignored, ...rest } = item;
+      return { ...rest, portfolioId: item.portfolioId };
+    }
     return { ...item };
   }
   if (tool !== "backtest_portfolio") {
@@ -900,6 +1065,11 @@ function operationOf(response: JsonObject): JsonObject {
     );
   }
   return operation;
+}
+
+/** @internal PortfolioHandle lazy-client attachment. */
+export function clientTransport(client: NexusTradeClient): Transport {
+  return (client as unknown as { transport: Transport }).transport;
 }
 
 /** Convenience wrapper for scripts that do not need a persistent client. */

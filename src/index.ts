@@ -11,9 +11,21 @@ export type {
   HttpTransportOptions,
   JsonObject,
   JsonValue,
+  ListPortfoliosOptions,
   NexusTradeClientOptions,
   RequestOptions,
   Transport,
   WaitOptions,
 } from "./client.js";
+export {
+  PortfolioHandle,
+  portfolioHandleFromWire,
+} from "./portfolio.js";
+export type {
+  DeployOutcome,
+  DeployResult,
+  PortfolioHandleOptions,
+  PortfolioListResult,
+  PortfolioType,
+} from "./portfolio.js";
 export * from "./generated/ntSdk.generated.js";
