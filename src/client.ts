@@ -99,12 +99,24 @@ const TERMINAL_STATUSES = ["cancelled", "completed", "failed"];
 export class NexusTradeApiError extends Error {
   readonly status: number;
   readonly code: string;
+  /**
+   * Set for operation errors (timeout / failure). A timed-out job is still
+   * running, so the caller needs the id to resume waiting without resubmitting
+   * — reading it out of the message is not an interface.
+   */
+  readonly operationId?: string;
 
-  constructor(status: number, code: string, message: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    operationId?: string,
+  ) {
     super(`${code}: ${message}`);
     this.name = "NexusTradeApiError";
     this.status = status;
     this.code = code;
+    this.operationId = operationId;
   }
 }
 
@@ -472,7 +484,7 @@ function operationFailure(
     if (error.code) code = String(error.code);
     if (error.message) message = String(error.message);
   }
-  return new NexusTradeApiError(NO_HTTP_STATUS, code, message);
+  return new NexusTradeApiError(NO_HTTP_STATUS, code, message, operationId);
 }
 
 /**
@@ -525,7 +537,8 @@ export async function waitForOperation(
         "operation_timeout",
         `Operation ${operationId} was still '${status || "unknown"}' after ` +
           `${timeoutSeconds}s. It is still running — poll again with the ` +
-          "same id rather than resubmitting.",
+          "same id (error.operationId) rather than resubmitting.",
+        operationId,
       );
     }
     if (interval > 0) {

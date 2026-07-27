@@ -87,7 +87,7 @@ const book = nt.portfolio("Momentum", [
 | **Portfolio state** | `PortfolioValue` `BuyingPower` `MaxDrawdown` `InitialValue` |
 | **Fundamentals** | `Fundamental` `Economic` `DaysUntilEarnings` `IsIndexMember` `IsIndustry` |
 | **Options** | `OptionDaysToExpiration` `OptionCollateral` `OptionUnrealizedPnL` `openOption` `closeOption` |
-| **Actions** | `buy` `sell` `deposit` `withdraw` `alert` `dynamicRebalance` `rebalanceOption` |
+| **Actions** | `buy` `sell` `alert` `dynamicRebalance` `rebalanceOption` |
 | **Selection** | `filter` `selectTop` `selectPercentile` `universe` |
 | **Logic** | `always` `atLeast` `atMost` `exactly` `fewerThan` `multi` `and` `or` |
 

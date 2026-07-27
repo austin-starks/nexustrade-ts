@@ -472,12 +472,6 @@ export const sell = (
   target: AssetArg, amount: number, type: AllocationType = "percent of portfolio",
 ): BuyOrSellAction =>
   ({ type: "Sell", targetAsset: toAsset(target), amount: { type, amount } });
-export const deposit = (
-  amount: number, type: DepositWithdrawAllocationType = "dollars",
-): DepositOrWithdrawAction => ({ type: "Deposit", amount: { type, amount } });
-export const withdraw = (
-  amount: number, type: DepositWithdrawAllocationType = "dollars",
-): DepositOrWithdrawAction => ({ type: "Withdraw", amount: { type, amount } });
 export const alert = (message: string): AlertAction => ({ type: "Alert", message });
 export const launchAgent = (config: {
   planningModel: string; executionModel: string; initialMessage: string;
