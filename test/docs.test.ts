@@ -25,14 +25,27 @@ function names(text: string, pattern: RegExp): string[] {
   return [...new Set([...text.matchAll(pattern)].map((match) => match[1]))].sort();
 }
 
-/** Every symbol either doc mentions — called, or named in a method table. */
-function documentedNames(): Set<string> {
+/**
+ * Every method named in README.md's Complete method reference table.
+ *
+ * Scoped to that one section on purpose. AGENTS.md tells readers the table is
+ * exhaustive, so the test has to enforce the table rather than "mentioned
+ * somewhere" — a passing mention in prose, or a sentence saying a method is NOT
+ * supported, would otherwise satisfy a gate that promises a reference.
+ */
+function methodTableNames(): Set<string> {
+  const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+  const section = readme.match(
+    /^#{2,} Complete method reference[ \t]*$([\s\S]*?)(?=^#{2,} |$(?![\s\S]))/m,
+  );
+  assert.ok(
+    section,
+    "README.md has no 'Complete method reference' section — the completeness gate has nothing to check against.",
+  );
   const found = new Set<string>();
-  for (const doc of DOCS) {
-    const text = readFileSync(join(ROOT, doc), "utf8");
-    for (const m of text.matchAll(/\b([a-zA-Z_][a-zA-Z0-9_]{2,})\(/g)) found.add(m[1]);
-    for (const m of text.matchAll(/`([a-zA-Z_][a-zA-Z0-9_]{2,})`/g)) found.add(m[1]);
-  }
+  // Rows name a method without calling it: `createBacktest`.
+  for (const m of section[1].matchAll(/`([a-zA-Z_][a-zA-Z0-9_]{2,})`/g)) found.add(m[1]);
+  for (const m of section[1].matchAll(/\b([a-zA-Z_][a-zA-Z0-9_]{2,})\(/g)) found.add(m[1]);
   return found;
 }
 
@@ -70,28 +83,28 @@ function publicMethods(proto: object, sourceFile: string): string[] {
  */
 describe("documentation completeness", () => {
   it("documents every public NexusTradeClient method", () => {
-    const documented = documentedNames();
+    const documented = methodTableNames();
     const missing = publicMethods(NexusTradeClient.prototype, "client.ts")
       .filter((name) => !documented.has(name))
       .sort();
     assert.deepEqual(
       missing,
       [],
-      `${missing.length} public NexusTradeClient method(s) appear in neither ` +
-        `README.md nor AGENTS.md: ${missing.join(", ")}. Add them to the method table.`,
+      `${missing.length} public NexusTradeClient method(s) are absent from ` +
+        `README.md's Complete method reference: ${missing.join(", ")}. Add them to that table.`,
     );
   });
 
   it("documents every public PortfolioHandle method", () => {
-    const documented = documentedNames();
+    const documented = methodTableNames();
     const missing = publicMethods(PortfolioHandle.prototype, "portfolio.ts")
       .filter((name) => !documented.has(name) && name !== "toJSON")
       .sort();
     assert.deepEqual(
       missing,
       [],
-      `${missing.length} public PortfolioHandle method(s) are undocumented: ` +
-        missing.join(", "),
+      `${missing.length} public PortfolioHandle method(s) are absent from ` +
+        `README.md's Complete method reference: ${missing.join(", ")}`,
     );
   });
 
