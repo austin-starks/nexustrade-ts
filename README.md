@@ -165,6 +165,49 @@ const study = await client.createWalkForward(
 await client.waitForWalkForward(study.id as string);
 ```
 
+## Deploying a portfolio
+
+Authoring and backtesting a book does not persist it. `save` writes it to your
+account; `deploy` starts running it.
+
+```ts
+const book = nt.portfolio("Momentum", [/* … */]);
+
+await book.save({ idempotencyKey: "momentum-v1" });   // persists; sets book.id
+const deployment = await book.deploy();               // starts paper trading
+await book.undeploy();                                // stops it
+```
+
+**`save` and `deploy` produce different ids, and the distinction matters.**
+`save` persists a *draft* and sets `book.id` to it. `deploy` mints the real
+paper portfolio and returns its own `portfolioId` — deploying creates a
+portfolio rather than converting the draft into one, so the two ids coexist.
+Hold on to `deployment.portfolioId` for anything that reads live state;
+`book.id` addresses the draft.
+
+```ts
+deployment.portfolioId      // the running portfolio
+deployment.deploymentType   // paper
+deployment.outcome          // created | reactivated
+```
+
+Handle methods accept an optional `transport`; omitted, they resolve one from
+the environment. The same operations exist on the client — `client.deploy(id)`,
+`client.undeploy(id)` — when you have an id rather than a handle.
+
+```ts
+await client.listPortfolios({ includePaper: true, includePositions: true });
+await client.getPortfolio(portfolioId);
+```
+
+`listPortfolios` filters with `includePaper`, `includeLive`, `includeInactive`,
+`includeChatPortfolios`, `search`, `limit`, and `page`. `includePositions`
+defaults off when `search` is set.
+
+**Live trading is not reachable from this SDK yet.** `deploy` is paper only.
+Connecting a brokerage and deploying live happen in the web app; placing orders
+is not exposed here at all. See [Scope](#scope).
+
 ## Your own data
 
 A custom data source is a time series you own — sentiment counts, a proprietary
@@ -315,6 +358,93 @@ tables; your SQL does not change when it does.
 
 > The Python SDK additionally ships `nt.lake.sql(...)`, a DuckDB/pandas
 > convenience layer over these same endpoints.
+
+## Complete method reference
+
+Every public method on `NexusTradeClient`. A test in this package fails if one
+is missing here, so this list cannot drift from the code.
+
+**Portfolios**
+
+| Method | Purpose |
+| --- | --- |
+| `createPortfolio(book, { idempotencyKey })` | Persist a portfolio definition |
+| `listPortfolios(options)` | List portfolios, with filters and pagination |
+| `getPortfolio(portfolioId)` | Read one portfolio |
+| `deploy(portfolioId, { frequency })` | Start paper trading it |
+| `undeploy(portfolioId)` | Stop it |
+
+**Backtests**
+
+| Method | Purpose |
+| --- | --- |
+| `createBacktest(handle, { idempotencyKey })` | Submit one backtest |
+| `createBacktests(handles, { idempotencyKey })` | Submit many in one request |
+| `getBacktest(backtestId)` | Read the operation |
+| `waitForBacktest(backtestId, options)` | Block until terminal |
+| `waitForBacktests(operations, options)` | Block on a whole batch |
+
+**Optimization and walk-forward**
+
+| Method | Purpose |
+| --- | --- |
+| `createOptimization(handle, { idempotencyKey })` | Submit an optimization |
+| `getOptimization(optimizationId)` | Read the operation |
+| `waitForOptimization(optimizationId, options)` | Block until terminal |
+| `createWalkForward(handle, { idempotencyKey })` | Submit a walk-forward study |
+| `getWalkForward(studyId)` | Read the operation |
+| `waitForWalkForward(studyId, options)` | Block until terminal |
+
+**Custom data sources**
+
+| Method | Purpose |
+| --- | --- |
+| `createCustomIndicator(spec, { idempotencyKey })` | Create a series, optionally seeded |
+| `listCustomIndicators(options)` | List owned series |
+| `getCustomIndicator(id)` | Read one, with its point count and range |
+| `appendCustomIndicatorPoints(id, points, { idempotencyKey })` | Add points |
+| `createCustomIndicatorUpload(id, options)` | Open an upload slot (CSV/JSON/JSONL) |
+| `completeCustomIndicatorUpload(id, jobId)` | Start validating uploaded bytes |
+| `getCustomIndicatorUpload(id, jobId)` | Read the upload operation |
+| `waitForCustomIndicatorUpload(id, jobId, options)` | Block until validated |
+
+**Agent runs**
+
+| Method | Purpose |
+| --- | --- |
+| `createAgent(prompt, { idempotencyKey })` | Start a run |
+| `getAgent(agentId)` | Read its status |
+| `attachAgent(agentId, { cursor })` | Reattach to a run already in flight |
+
+**Lake SQL**
+
+| Method | Purpose |
+| --- | --- |
+| `createLakeQuery(request, { idempotencyKey })` | Submit read-only SQL |
+| `getLakeQuery(queryId)` | Read the operation |
+| `waitForLakeQuery(queryId, options)` | Block until terminal |
+| `cancelLakeQuery(queryId)` | Cancel an owned query |
+| `getLakeQueryManifest(queryId)` | Schema, checksums, and part metadata |
+| `downloadLakeQueryPart(queryId, part, options)` | Download one Parquet part |
+| `getLakeCatalog()` | List queryable tables |
+| `describeLakeTable(table)` | Columns and types for one table |
+
+**Client construction**
+
+| Method | Purpose |
+| --- | --- |
+| `new NexusTradeClient({ apiKey, baseUrl })` | Explicit credentials |
+| `NexusTradeClient.fromEnvironment()` | Read them from the environment or `.env` |
+
+**PortfolioHandle** — returned by the `portfolio(...)` builder and by
+`getPortfolio` / `listPortfolios`.
+
+| Method | Purpose |
+| --- | --- |
+| `save({ idempotencyKey })` | Persist it as a draft, setting `.id` |
+| `backtest({ startDate, endDate, idempotencyKey })` | Backtest it, preferring the saved id |
+| `deploy({ frequency })` | Mint the real paper portfolio (new id) |
+| `undeploy()` | Deactivate its deployment |
 
 ## Authentication
 
