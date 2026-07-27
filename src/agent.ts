@@ -81,6 +81,14 @@ export class AgentRun {
   readonly #transport: Transport;
   #cursor: string | null = null;
   readonly #seen = new Map<string, string>();
+  /**
+   * Advances only after a POST is acknowledged, so a retry of a call that
+   * failed reuses its key and is deduped, while two different calls never
+   * collide. Keying on `events.length` did the latter wrong: two messages sent
+   * without iterating between them shared a key and the second was rejected as
+   * an idempotency conflict.
+   */
+  #actionSeq = 0;
 
   constructor(
     id: string,
@@ -280,9 +288,10 @@ export class AgentRun {
       `agents/${encodeURIComponent(this.id)}/${action}`,
       {
         body,
-        idempotencyKey: `${this.id}:${action}:${this.events.length}`,
+        idempotencyKey: `${this.id}:${action}:${this.#actionSeq}`,
       },
     );
+    this.#actionSeq += 1;
     const agent = response.agent;
     if (agent && typeof agent === "object" && !Array.isArray(agent)) {
       const status = (agent as JsonObject).status;
