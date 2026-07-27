@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deps](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](package.json)
 
-[Quickstart](#quickstart) · [Authoring](#authoring-strategies) · [Polling](#jobs-run-on-the-engine--you-poll) · [Lake SQL](#lake-sql) · [Auth](#authentication) · [Errors](#errors)
+[Quickstart](#quickstart) · [Authoring](#authoring-strategies) · [Polling](#jobs-run-on-the-engine--you-poll) · [Agents](#agent-runs) · [Lake SQL](#lake-sql) · [Auth](#authentication) · [Errors](#errors)
 
 </div>
 
@@ -100,6 +100,27 @@ Every builder is fully typed — your editor completes the whole surface.
 `create*` enqueues work and returns immediately. It does **not** resolve when
 results exist. There are no webhooks today.
 
+```mermaid
+sequenceDiagram
+    participant You
+    participant SDK
+    participant Engine
+
+    You->>SDK: createBacktest(book)
+    SDK->>Engine: POST (enqueue)
+    Engine-->>SDK: id, status=queued
+    SDK-->>You: operation (returns immediately)
+
+    loop waitForBacktest — backoff 2s→15s
+        SDK->>Engine: GET /operations/{id}
+        Engine-->>SDK: status update
+    end
+
+    SDK-->>You: result (when completed)
+
+    Note over You,Engine: Poll timeout throws operation_timeout.<br/>The job keeps running — call wait again with the same id.
+```
+
 Every job kind reports the same envelope, so one poller serves all of them:
 
 ```ts
@@ -144,11 +165,68 @@ const study = await nt.createWalkForward(
 await nt.waitForWalkForward(study.id as string);
 ```
 
+## Agent runs
+
+Every other job is fire-and-poll. **Agents are not** — three states
+(`pending_plan_approval`, `pending_action_approval`, `awaiting_user_input`)
+cannot advance without you. Iterate the run and answer when it blocks:
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant Run as AgentRun
+    participant Engine
+
+    You->>Run: createAgent(prompt)
+    Run->>Engine: POST /agents
+    Engine-->>Run: run id
+
+    loop for await (const event of run)
+        Run->>Engine: GET events (cursor)
+        Engine-->>Run: new events
+
+        alt event.needsApproval
+            Run-->>You: plan or action awaiting approval
+            You->>Run: approve() or reject()
+            Run->>Engine: POST approval
+        else event.needsInput
+            Run-->>You: awaiting user input
+            You->>Run: say("...")
+            Run->>Engine: POST message
+        else
+            Run-->>You: event.text
+        end
+    end
+
+    Run-->>You: terminal
+
+    Note over You,Engine: Without approve/say, the run stalls and bills.<br/>Reattach later with attachAgent(run.id).
+```
+
+```ts
+const run = await nt.createAgent("Find momentum names in the S&P 500", {
+  idempotencyKey: "momentum-scan-v1",
+});
+for await (const event of run) {
+  console.log(event.text);
+  if (event.needsApproval) await run.approve();
+  if (event.needsInput) await run.say("Focus on tech");
+}
+```
+
 ## Lake SQL
 
 Read-only SQL over the NexusTrade market-data lake, against the server-resolved
 `lake.*` catalog. Results are durable Parquet parts rather than an implicitly
 materialized in-memory array.
+
+```mermaid
+flowchart LR
+    A[createLakeQuery] --> B[waitForLakeQuery]
+    B --> C[getLakeQueryManifest]
+    C --> D[downloadLakeQueryPart]
+    D --> E[Stream Parquet within your memory budget]
+```
 
 ```ts
 const query = await nt.createLakeQuery(

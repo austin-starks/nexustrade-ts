@@ -1,9 +1,8 @@
 /**
  * Typed NexusTrade JSON API client.
  *
- * Mirrors the Python client method-for-method; `verifyNtSdk.ts` asserts the two
- * surfaces stay identical. Transport-generic: callers pass an API key/base URL,
- * or set NEXUSTRADE_API_KEY / NEXUSTRADE_API_BASE_URL.
+ * Method names and behavior match the Python SDK. Transport-generic: callers
+ * pass an API key/base URL, or set NEXUSTRADE_API_KEY / NEXUSTRADE_API_BASE_URL.
  */
 
 import { AgentRun } from "./agent.ts";
@@ -603,7 +602,7 @@ export class NexusTradeClient {
   }
 
   /**
-   * List portfolios. Mirrors MCP `fetch_portfolios` (boolean includes, page/limit).
+   * List portfolios with optional filters and pagination.
    * `includePositions` defaults off when `search` is set.
    */
   async listPortfolios(

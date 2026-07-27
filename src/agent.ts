@@ -19,8 +19,6 @@
  *   if (event.needsApproval) await run.approve();
  * }
  * ```
- *
- * Mirrors `agent.py`. See designs/2026-07-26-sdk-agent-runs.md.
  */
 
 import {
@@ -72,9 +70,8 @@ export class AgentRun {
   readonly events: AgentEvent[] = [];
 
   /**
-   * Pacing, public and mutable to mirror the Python dataclass fields. Tests
-   * collapse the backoff through these; callers can widen the timeout on a run
-   * they expect to sit blocked for a while.
+   * Polling pacing. Mutable so callers can widen the timeout on a run they
+   * expect to sit blocked for a while.
    */
   timeoutSeconds: number;
   pollIntervalSeconds: number;

@@ -3,12 +3,10 @@
  *
  * Keeps the generated `Portfolio` interface as the shape; this class adds
  * lifecycle methods. `toJSON()` omits `id` so request bodies never leak
- * `"id": null`. Mirrors `portfolio_handle.py`.
+ * `"id": null`.
  *
  * Holds a `Transport` (same pattern as `AgentRun`) so the generated builder can
  * import this module without a cycle through `client.ts`.
- *
- * See designs/2026-07-26-sdk-portfolio-objects.md.
  */
 
 import {
