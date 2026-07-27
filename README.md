@@ -187,7 +187,7 @@ Hold on to `deployment.portfolioId` for anything that reads live state;
 
 ```ts
 deployment.portfolioId      // the running portfolio
-deployment.deploymentType   // paper
+deployment.deploymentType   // paper, unless you deployed an existing live one
 deployment.outcome          // created | reactivated
 ```
 
@@ -204,9 +204,15 @@ await client.getPortfolio(portfolioId);
 `includeChatPortfolios`, `search`, `limit`, and `page`. `includePositions`
 defaults off when `search` is set.
 
-`deploy` is paper only — minting a *live* portfolio still happens in the web
-app. Orders and brokerage status are reachable from here; see
-[Live trading](#live-trading).
+**A portfolio you create here is always paper**, and minting a *live* one still
+happens in the web app. Orders and brokerage status are reachable from here;
+see [Live trading](#live-trading).
+
+**But `deploy` can start live trading.** Given the id of a portfolio that is
+already deployed, it reactivates that portfolio as whatever it already is — so
+`client.deploy(id)` on a paused live portfolio resumes live trading against the connected
+brokerage, and `includeLive: true` above will hand you such an id. Check `deployment.deploymentType` before
+treating a deploy as simulated.
 
 ## Live trading
 
@@ -603,7 +609,10 @@ deadline for one request. Neither it nor the poll timeout bounds how long a
 
 Portfolio drafting, backtesting, optimization, walk-forward studies, and
 read-only SQL over the market-data lake, versioned under `/api/v1/nexustrade`.
-The screener and live trading remain outside this surface.
+The screener and creating a live deployment remain outside this surface.
+Orders are reachable, but a live order is only ever staged for human approval —
+never submitted. `deploy` and `undeploy` act on whatever an existing id already
+is, live included.
 
 ## Requirements
 
