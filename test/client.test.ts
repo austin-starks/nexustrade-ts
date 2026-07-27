@@ -321,3 +321,226 @@ describe("operation waiter", () => {
     );
   });
 });
+
+class UploadingTransport extends FakeTransport {
+  readonly uploads: {
+    url: string;
+    data: Uint8Array<ArrayBuffer>;
+    contentType: string;
+  }[] = [];
+
+  async putBytes(
+    url: string,
+    data: Uint8Array<ArrayBuffer>,
+    options: { contentType: string },
+  ): Promise<void> {
+    this.uploads.push({ url, data, contentType: options.contentType });
+  }
+}
+
+function bigPoints(count: number): { timestamp: string; value: number; ticker: string }[] {
+  return Array.from({ length: count }, (_, index) => ({
+    timestamp: `2024-04-${String((index % 28) + 1).padStart(2, "0")}`,
+    value: index,
+    ticker: `TCK${String(index).padStart(5, "0")}`,
+  }));
+}
+
+describe("custom indicators", () => {
+  it("uploads a large batch instead of inlining it", async () => {
+    const points = bigPoints(20_000);
+    const transport = new UploadingTransport([
+      { indicator: { customIndicatorId: "ci-1", pointCount: 0 } },
+      {
+        ticket: {
+          jobId: "job-1",
+          uploadUrl: "https://storage.example/put",
+          headers: { "Content-Type": "application/x-ndjson" },
+        },
+      },
+      { operation: { id: "job-1", status: "queued" } },
+      {
+        operation: {
+          id: "job-1",
+          status: "completed",
+          result: { acceptedRows: points.length },
+        },
+      },
+      { indicator: { customIndicatorId: "ci-1", pointCount: points.length } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    const result = await client.createCustomIndicator(
+      { name: "Big", scope: "asset", points },
+      { idempotencyKey: "big-v1" },
+    );
+
+    // The create request carries no points; they went to storage directly.
+    assert.equal(transport.calls[0].body?.points, undefined);
+    assert.deepEqual(
+      transport.calls.map((call) => call.path),
+      [
+        "custom-indicators",
+        "custom-indicators/ci-1/uploads",
+        "custom-indicators/ci-1/uploads/job-1/complete",
+        "custom-indicators/ci-1/uploads/job-1",
+        "custom-indicators/ci-1",
+      ],
+    );
+    assert.equal(transport.calls[1].body?.format, "jsonl");
+    assert.equal(
+      transport.calls[1].body?.sizeBytes,
+      transport.uploads[0].data.length,
+    );
+    // The server namespaces claims by operation, so reusing the key is safe
+    // and cannot overrun its length limit.
+    assert.equal(transport.calls[1].idempotencyKey, "big-v1");
+    assert.equal(transport.uploads[0].url, "https://storage.example/put");
+    assert.equal(transport.uploads[0].contentType, "application/x-ndjson");
+    assert.equal(
+      new TextDecoder().decode(transport.uploads[0].data).trimEnd().split("\n")
+        .length,
+      points.length,
+    );
+    assert.equal(result.pointCount, points.length);
+    assert.deepEqual(result.upload, {
+      id: "job-1",
+      status: "completed",
+      result: { acceptedRows: points.length },
+    });
+  });
+
+  it("resumes polling on a retry instead of resending the batch", async () => {
+    // An upload interrupted after its PUT must be resumable. The replayed
+    // ticket carries no uploadUrl because the bytes already landed; re-sending
+    // them (or failing outright) would strand a caller whose only fault was a
+    // poll timeout.
+    const points = bigPoints(20_000);
+    const transport = new UploadingTransport([
+      { indicator: { customIndicatorId: "ci-1", pointCount: 0 } },
+      // Replayed ticket: job known, nothing left to upload.
+      { ticket: { jobId: "job-1", status: "validating" } },
+      {
+        operation: {
+          id: "job-1",
+          status: "completed",
+          result: { acceptedRows: points.length },
+        },
+      },
+      { indicator: { customIndicatorId: "ci-1", pointCount: points.length } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    const result = await client.createCustomIndicator(
+      { name: "Big", scope: "asset", points },
+      { idempotencyKey: "big-v1" },
+    );
+
+    assert.deepEqual(transport.uploads, []);
+    assert.deepEqual(
+      transport.calls.map((call) => call.path),
+      [
+        "custom-indicators",
+        "custom-indicators/ci-1/uploads",
+        // No /complete — the first attempt already started validation.
+        "custom-indicators/ci-1/uploads/job-1",
+        "custom-indicators/ci-1",
+      ],
+    );
+    assert.equal(result.pointCount, points.length);
+  });
+
+  it("raises rather than reporting success on a failed upload", async () => {
+    const transport = new UploadingTransport([
+      { indicator: { customIndicatorId: "ci-1" } },
+      {
+        ticket: {
+          jobId: "job-1",
+          uploadUrl: "https://storage.example/put",
+          headers: { "Content-Type": "application/x-ndjson" },
+        },
+      },
+      { operation: { id: "job-1", status: "queued" } },
+      {
+        operation: {
+          id: "job-1",
+          status: "failed",
+          error: {
+            code: "custom_indicator_upload_failed",
+            message: "row 4: Invalid datetime",
+          },
+        },
+      },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await assert.rejects(
+      () =>
+        client.createCustomIndicator(
+          { name: "Big", scope: "asset", points: bigPoints(20_000) },
+          { idempotencyKey: "big-v1" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof NexusTradeApiError);
+        assert.equal(error.code, "custom_indicator_upload_failed");
+        return true;
+      },
+    );
+  });
+
+  it("needs an upload-capable transport for a large batch", async () => {
+    const transport = new FakeTransport([
+      { indicator: { customIndicatorId: "ci-1" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await assert.rejects(
+      () =>
+        client.createCustomIndicator(
+          { name: "Big", points: bigPoints(20_000) },
+          { idempotencyKey: "big-v1" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof NexusTradeApiError);
+        assert.equal(error.code, "unsupported_transport");
+        return true;
+      },
+    );
+  });
+
+  it("serializes Date points as ISO strings", async () => {
+    const transport = new FakeTransport([
+      { indicator: { customIndicatorId: "ci-1" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.createCustomIndicator(
+      {
+        name: "Dated",
+        points: [{ timestamp: new Date("2024-04-01T00:00:00.000Z"), value: 3 }],
+      },
+      { idempotencyKey: "dated-v1" },
+    );
+
+    assert.deepEqual(transport.calls[0].body?.points, [
+      { timestamp: "2024-04-01T00:00:00.000Z", value: 3 },
+    ]);
+  });
+
+  it("passes the archive filter when listing", async () => {
+    const transport = new FakeTransport([
+      { indicators: [{ customIndicatorId: "ci-1" }] },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    const indicators = await client.listCustomIndicators({
+      includeArchived: true,
+    });
+
+    assert.equal(
+      transport.calls[0].path,
+      "custom-indicators?includeArchived=true",
+    );
+    assert.deepEqual(indicators, [{ customIndicatorId: "ci-1" }]);
+  });
+});

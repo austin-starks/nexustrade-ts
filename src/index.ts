@@ -4,10 +4,13 @@ export {
   HttpTransport,
   NexusTradeApiError,
   NexusTradeClient,
+  createCustomIndicator,
   createPortfolio,
   waitForOperation,
 } from "./client.js";
 export type {
+  CustomIndicatorInput,
+  CustomIndicatorPointInput,
   HttpTransportOptions,
   JsonObject,
   JsonValue,
@@ -15,6 +18,7 @@ export type {
   NexusTradeClientOptions,
   RequestOptions,
   Transport,
+  UploadTransport,
   WaitOptions,
 } from "./client.js";
 export {

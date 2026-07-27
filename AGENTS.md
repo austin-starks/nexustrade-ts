@@ -25,7 +25,7 @@ export NEXUSTRADE_API_BASE_URL=https://nexustrade.io/api/v1
 
 ```ts
 import { NexusTradeClient } from "nexustrade";
-const nt = new NexusTradeClient();   // reads the environment
+const client = new NexusTradeClient();   // reads the environment
 ```
 
 Keys come from https://nexustrade.io/developers. Never hardcode one into a file
@@ -68,10 +68,10 @@ retry with a new key launches a second paid job.
 
 ```ts
 // Right — same logical run reuses the key across retries
-await nt.createBacktest(handle, { idempotencyKey: "momentum-2024-v1" });
+await client.createBacktest(handle, { idempotencyKey: "momentum-2024-v1" });
 
 // Wrong — every retry is a new billable job
-await nt.createBacktest(handle, { idempotencyKey: `run-${Date.now()}` });
+await client.createBacktest(handle, { idempotencyKey: `run-${Date.now()}` });
 ```
 
 Reusing a key with a *different* payload is a `409 idempotency_conflict`. Version
@@ -80,9 +80,9 @@ the key when the request changes: `momentum-2024-v2`.
 **4. `create*` does not wait. Poll.**
 
 ```ts
-const operation = await nt.createBacktest(handle, { idempotencyKey: "k" });
+const operation = await client.createBacktest(handle, { idempotencyKey: "k" });
 // operation.result is ABSENT here — the job has not run yet.
-const finished = await nt.waitForBacktest(operation.id as string);
+const finished = await client.waitForBacktest(operation.id as string);
 console.log(finished.result);
 ```
 
@@ -92,10 +92,10 @@ do not resubmit.
 **5. Batch when you have several.**
 
 ```ts
-const operations = await nt.createBacktests([h1, h2, h3], {
+const operations = await client.createBacktests([h1, h2, h3], {
   idempotencyKey: "sweep-v1",
 });
-const results = await nt.waitForBacktests(operations);
+const results = await client.waitForBacktests(operations);
 ```
 
 One request, one key, one rate-limit slot — instead of three of each.
@@ -113,6 +113,28 @@ write, and never log one. Exported values win over the file.
 **8. Responses are `JsonObject`.** Fields come back typed as `JsonValue`, so
 narrow before use (`operation.id as string`). This is deliberate: the envelope is
 whatever the API returned, not a promise the SDK can statically make.
+
+**9. Your own data belongs in ONE series.** `createCustomIndicator` mints a new
+series every time it is called with a fresh idempotency key. Recurring
+collection must `appendCustomIndicatorPoints` onto the id it created the first
+time — a new series per run splits the history into fragments no strategy can
+read. Persist the id; never re-create by name.
+
+```ts
+// Right — one series, appended forever
+await client.appendCustomIndicatorPoints(seriesId, todaysPoints, {
+  idempotencyKey: `mentions-${today}`,
+});
+
+// Wrong — a new, disconnected series every run
+await client.createCustomIndicator(
+  { name: "Mentions", points: todaysPoints },
+  { idempotencyKey: `mentions-${today}` },
+);
+```
+
+Point batches are unlimited in size; the SDK sends them inline or uploads them.
+Do not chunk by hand.
 
 ## Recipes
 
@@ -201,7 +223,7 @@ pair.
 <summary><b>Query the data lake</b></summary>
 
 ```ts
-const query = await nt.createLakeQuery(
+const query = await client.createLakeQuery(
   {
     query: "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
     params: ["AAPL"],
@@ -209,8 +231,8 @@ const query = await nt.createLakeQuery(
   },
   { idempotencyKey: "aapl-daily-v1" },
 );
-const finished = await nt.waitForLakeQuery(query.id as string);
-const manifest = await nt.getLakeQueryManifest(finished.id as string);
+const finished = await client.waitForLakeQuery(query.id as string);
+const manifest = await client.getLakeQueryManifest(finished.id as string);
 ```
 
 Always parameterize with `?` rather than interpolating into the SQL string.
@@ -225,7 +247,7 @@ Agents are the one job kind that is NOT fire-and-poll. Three states —
 ones the run cannot leave on its own, so the caller is the approver.
 
 ```ts
-const run = await nt.createAgent("Find momentum names in the S&P 500", {
+const run = await client.createAgent("Find momentum names in the S&P 500", {
   idempotencyKey: "momentum-scan-v1",
 });
 
@@ -238,7 +260,7 @@ for await (const event of run) {
 
 Iterating waits. If you never answer a blocked run, iteration throws
 `agent_awaiting_input` rather than spinning silently — the run keeps going
-server-side, so reattach with `nt.attachAgent(run.id)`.
+server-side, so reattach with `client.attachAgent(run.id)`.
 
 Approving can place orders, so it needs the `trade` scope; everything else
 needs `write`. Agent runs are unavailable to `run_compute` sandbox code.

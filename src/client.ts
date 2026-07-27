@@ -95,6 +95,19 @@ export const MAX_POLL_INTERVAL_SECONDS = 15;
 export const POLL_BACKOFF_FACTOR = 1.5;
 const TERMINAL_STATUSES = ["cancelled", "completed", "failed"];
 
+// Point batches larger than this are uploaded rather than sent inline.
+const MAX_INLINE_POINT_BYTES = 512 * 1024;
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const POINT_FIELDS: Record<string, string> = {
+  timestamp: "timestamp",
+  value: "value",
+  ticker: "ticker",
+  assetType: "assetType",
+  asset_type: "assetType",
+  availableAt: "availableAt",
+  available_at: "availableAt",
+};
+
 export class NexusTradeApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -174,6 +187,23 @@ function supportsBinary(transport: Transport): transport is BinaryTransport {
   return (
     typeof (transport as BinaryTransport).requestBytes === "function"
   );
+}
+
+/**
+ * Transports that can PUT bytes to a presigned storage URL.
+ *
+ * The URL is absolute and the call carries no credential.
+ */
+export interface UploadTransport extends Transport {
+  putBytes(
+    url: string,
+    data: Uint8Array<ArrayBuffer>,
+    options: { contentType: string },
+  ): Promise<void>;
+}
+
+function supportsUpload(transport: Transport): transport is UploadTransport {
+  return typeof (transport as UploadTransport).putBytes === "function";
 }
 
 export interface HttpTransportOptions {
@@ -288,7 +318,7 @@ function decodeJsonObject(bytes: Uint8Array, status: number): JsonObject {
   return decoded as JsonObject;
 }
 
-export class HttpTransport implements Transport {
+export class HttpTransport implements Transport, UploadTransport {
   // `#` fields, not TS `private` — the credential must be unreachable at
   // runtime too, matching the Python dataclass's `repr=False`.
   readonly #apiKey: string;
@@ -309,6 +339,66 @@ export class HttpTransport implements Transport {
 
   get baseUrl(): string {
     return this.#baseUrl;
+  }
+
+  /** PUT a payload to a presigned storage URL. Sends no credential. */
+  async putBytes(
+    url: string,
+    data: Uint8Array<ArrayBuffer>,
+    options: { contentType: string },
+  ): Promise<void> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "unsafe_upload_url",
+        "NexusTrade refused a malformed upload URL.",
+      );
+    }
+    if (parsed.protocol.toLowerCase() !== "https:") {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "unsafe_upload_url",
+        "NexusTrade refused a non-HTTPS upload URL.",
+      );
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(),
+      this.#timeoutSeconds * 1000,
+    );
+    try {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "PUT",
+          headers: { "Content-Type": options.contentType },
+          body: new Blob([data], { type: options.contentType }),
+          redirect: "manual",
+          signal: controller.signal,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new NexusTradeApiError(
+          NO_HTTP_STATUS,
+          "transport_error",
+          reason,
+        );
+      }
+      if (!response.ok) {
+        throw new NexusTradeApiError(
+          response.status,
+          "upload_failed",
+          `Storage rejected the upload: ${
+            response.statusText || `HTTP ${response.status}`
+          }.`,
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async request(
@@ -498,6 +588,78 @@ function operationFailure(
  * false. Transport errors from `fetch` propagate — a poller that swallowed
  * them would report an infrastructure outage as a still-running job.
  */
+export interface CustomIndicatorPointInput {
+  timestamp: string | Date;
+  value: number;
+  ticker?: string;
+  assetType?: string;
+  availableAt?: string | Date;
+  [field: string]: unknown;
+}
+
+export interface CustomIndicatorInput {
+  name: string;
+  description?: string;
+  scope?: "global" | "asset";
+  points?: ReadonlyArray<CustomIndicatorPointInput>;
+}
+
+function pointTimestamp(value: unknown): JsonValue {
+  return value instanceof Date ? value.toISOString() : (value as JsonValue);
+}
+
+/**
+ * Normalize one point to its wire shape.
+ *
+ * Accepts snake_case or camelCase field names and Date objects. Throws on an
+ * unrecognized field rather than dropping it silently.
+ */
+function customIndicatorPoint(point: CustomIndicatorPointInput): JsonObject {
+  const normalized: JsonObject = {};
+  for (const [key, value] of Object.entries(point)) {
+    const target = POINT_FIELDS[key];
+    if (target === undefined) {
+      throw new Error(
+        `Unknown custom indicator point field "${key}". Points accept ` +
+          "timestamp, value, ticker, assetType, and availableAt.",
+      );
+    }
+    if (value === undefined || value === null) continue;
+    normalized[target] =
+      target === "timestamp" || target === "availableAt"
+        ? pointTimestamp(value)
+        : (value as JsonValue);
+  }
+  if (normalized.timestamp === undefined) {
+    throw new Error("Every custom indicator point needs a timestamp.");
+  }
+  if (normalized.value === undefined) {
+    throw new Error("Every custom indicator point needs a value.");
+  }
+  return normalized;
+}
+
+function customIndicatorPoints(
+  points: ReadonlyArray<CustomIndicatorPointInput>,
+): JsonObject[] {
+  if (!Array.isArray(points)) {
+    throw new Error("points must be an array of point objects.");
+  }
+  return points.map(customIndicatorPoint);
+}
+
+function pointsJsonl(
+  points: ReadonlyArray<JsonObject>,
+): Uint8Array<ArrayBuffer> {
+  return new TextEncoder().encode(
+    points.map((point) => `${JSON.stringify(point)}\n`).join(""),
+  );
+}
+
+function inlinePointBytes(points: ReadonlyArray<JsonObject>): number {
+  return new TextEncoder().encode(JSON.stringify(points)).length;
+}
+
 export async function waitForOperation(
   fetch: (operationId: string) => Promise<JsonObject>,
   operationId: string,
@@ -725,6 +887,289 @@ export class NexusTradeClient {
       );
     }
     return result;
+  }
+
+  /**
+   * Create a custom data source and return it, including its id.
+   *
+   * `scope` is `"global"` (one series) or `"asset"` (one series per ticker, so
+   * every point needs a `ticker`); it defaults to `"global"` and cannot be
+   * changed later. `points` is optional and unlimited in size — small batches
+   * are sent with the request, larger ones are uploaded, and the returned
+   * indicator reflects what landed either way.
+   *
+   * The id it returns is what a `CustomIndicator` node binds to:
+   *
+   * ```ts
+   * const series = await client.createCustomIndicator(
+   *   {
+   *     name: "WSB NVDA Mentions",
+   *     scope: "asset",
+   *     points: [{ timestamp: "2024-04-01", value: 152, ticker: "NVDA" }],
+   *   },
+   *   { idempotencyKey: "wsb-mentions-v1" },
+   * );
+   * CustomIndicator(stockAsset("NVDA"), String(series.customIndicatorId));
+   * ```
+   *
+   * Retrying with the same `idempotencyKey` returns the original series rather
+   * than creating a second one.
+   */
+  async createCustomIndicator(
+    indicator: CustomIndicatorInput,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    const { name, description, scope, points, ...rest } = indicator;
+    if (typeof name !== "string" || !name.trim()) {
+      throw new Error("createCustomIndicator requires a name.");
+    }
+    const unknown = Object.keys(rest);
+    if (unknown.length > 0) {
+      throw new Error(
+        `Unknown custom indicator field(s): ${unknown.sort().join(", ")}. ` +
+          "Expected name, description, scope, and points.",
+      );
+    }
+    const normalized = points ? customIndicatorPoints(points) : [];
+    const body: JsonObject = { name: name.trim() };
+    if (description !== undefined) body.description = description;
+    if (scope !== undefined) body.scope = scope;
+    const inline =
+      normalized.length > 0 &&
+      inlinePointBytes(normalized) <= MAX_INLINE_POINT_BYTES;
+    if (inline) body.points = normalized;
+    const created = customIndicatorOf(
+      await this.transport.request("POST", "custom-indicators", {
+        body,
+        idempotencyKey: options.idempotencyKey,
+      }),
+    );
+    if (inline || normalized.length === 0) return created;
+    const customIndicatorId = String(created.customIndicatorId);
+    // The same key is safe here: the server namespaces an idempotency claim
+    // by operation, and deriving a suffixed key could overrun its
+    // 160-character limit.
+    const upload = await this.uploadCustomIndicatorPoints(
+      customIndicatorId,
+      normalized,
+      options.idempotencyKey,
+    );
+    return {
+      ...(await this.getCustomIndicator(customIndicatorId)),
+      upload,
+    };
+  }
+
+  /** List the custom data sources this account owns. */
+  async listCustomIndicators(
+    options: { includeArchived?: boolean } = {},
+  ): Promise<JsonObject[]> {
+    const query = encodeQuery({
+      includeArchived:
+        options.includeArchived === undefined
+          ? undefined
+          : String(options.includeArchived),
+    });
+    const response = await this.transport.request(
+      "GET",
+      `custom-indicators${query}`,
+    );
+    const indicators = response.indicators;
+    if (!Array.isArray(indicators)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Custom indicator list response is missing indicators.",
+      );
+    }
+    return indicators.filter((row): row is JsonObject => isJsonObject(row));
+  }
+
+  /** Read one custom data source, including its current point count. */
+  async getCustomIndicator(customIndicatorId: string): Promise<JsonObject> {
+    return customIndicatorOf(
+      await this.transport.request(
+        "GET",
+        `custom-indicators/${encodePathSegment(customIndicatorId)}`,
+      ),
+    );
+  }
+
+  /**
+   * Add points to an existing series and return the updated indicator.
+   *
+   * Recurring collection must append to the same `customIndicatorId` every
+   * run; creating a fresh series per run splits the history into fragments a
+   * strategy cannot read. Re-sending an identical batch is safe — the
+   * duplicate is not written twice.
+   *
+   * The batch is unlimited in size and, as with creation, is sent inline or
+   * uploaded depending on how large it is.
+   */
+  async appendCustomIndicatorPoints(
+    customIndicatorId: string,
+    points: ReadonlyArray<CustomIndicatorPointInput>,
+    options: { idempotencyKey: string },
+  ): Promise<JsonObject> {
+    const normalized = customIndicatorPoints(points);
+    if (normalized.length === 0) {
+      throw new Error("appendCustomIndicatorPoints needs at least one point.");
+    }
+    if (inlinePointBytes(normalized) <= MAX_INLINE_POINT_BYTES) {
+      const response = await this.transport.request(
+        "POST",
+        `custom-indicators/${encodePathSegment(customIndicatorId)}/points`,
+        { body: { points: normalized }, idempotencyKey: options.idempotencyKey },
+      );
+      const indicator = response.indicator;
+      if (!isJsonObject(indicator)) {
+        throw new NexusTradeApiError(
+          NO_HTTP_STATUS,
+          "invalid_response",
+          "Custom indicator response is missing indicator.",
+        );
+      }
+      return indicator;
+    }
+    const upload = await this.uploadCustomIndicatorPoints(
+      customIndicatorId,
+      normalized,
+      options.idempotencyKey,
+    );
+    return {
+      ...(await this.getCustomIndicator(customIndicatorId)),
+      upload,
+    };
+  }
+
+  /**
+   * Open an upload slot and return a presigned `uploadUrl` to PUT to.
+   *
+   * Accepts `csv`, `json`, or `jsonl` up to 100 MB. PUT the bytes to the
+   * returned URL, then call `completeCustomIndicatorUpload`. Most callers can
+   * pass `points` to `createCustomIndicator` or
+   * `appendCustomIndicatorPoints` instead and skip all three steps.
+   *
+   * Retrying with the same `idempotencyKey` re-signs the same job, since the
+   * first URL expires in 15 minutes. Once its bytes have arrived the reply
+   * carries no `uploadUrl` — there is nothing left to send, so skip the PUT
+   * and wait on `jobId`.
+   */
+  async createCustomIndicatorUpload(
+    customIndicatorId: string,
+    options: {
+      fileName: string;
+      idempotencyKey: string;
+      format?: "csv" | "json" | "jsonl";
+      contentType?: string;
+      sizeBytes?: number;
+    },
+  ): Promise<JsonObject> {
+    const body: JsonObject = {
+      fileName: options.fileName,
+      format: options.format ?? "jsonl",
+    };
+    if (options.contentType !== undefined) body.contentType = options.contentType;
+    if (options.sizeBytes !== undefined) body.sizeBytes = options.sizeBytes;
+    const response = await this.transport.request(
+      "POST",
+      `custom-indicators/${encodePathSegment(customIndicatorId)}/uploads`,
+      { body, idempotencyKey: options.idempotencyKey },
+    );
+    const ticket = response.ticket;
+    if (!isJsonObject(ticket) || !ticket.jobId) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Upload response is missing ticket.",
+      );
+    }
+    return ticket;
+  }
+
+  /** Start validation of uploaded bytes and return the operation. */
+  async completeCustomIndicatorUpload(
+    customIndicatorId: string,
+    jobId: string,
+  ): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "POST",
+        `custom-indicators/${encodePathSegment(customIndicatorId)}` +
+          `/uploads/${encodePathSegment(jobId)}/complete`,
+        { body: {} },
+      ),
+    );
+  }
+
+  /** Read an upload operation. `phase` distinguishes the live states. */
+  async getCustomIndicatorUpload(
+    customIndicatorId: string,
+    jobId: string,
+  ): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "GET",
+        `custom-indicators/${encodePathSegment(customIndicatorId)}` +
+          `/uploads/${encodePathSegment(jobId)}`,
+      ),
+    );
+  }
+
+  /** Block until an upload is validated. See `waitForOperation`. */
+  async waitForCustomIndicatorUpload(
+    customIndicatorId: string,
+    jobId: string,
+    options: WaitOptions = {},
+  ): Promise<JsonObject> {
+    return waitForOperation(
+      (pendingId) => this.getCustomIndicatorUpload(customIndicatorId, pendingId),
+      jobId,
+      options,
+    );
+  }
+
+  private async uploadCustomIndicatorPoints(
+    customIndicatorId: string,
+    points: ReadonlyArray<JsonObject>,
+    idempotencyKey: string,
+  ): Promise<JsonObject> {
+    const payload = pointsJsonl(points);
+    if (payload.length > MAX_UPLOAD_BYTES) {
+      throw new Error(
+        `${points.length} points serialize to ` +
+          `${Math.floor(payload.length / (1024 * 1024))} MB, over the 100 MB ` +
+          "upload limit. Send them in several batches.",
+      );
+    }
+    if (!supportsUpload(this.transport)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "unsupported_transport",
+        "Uploading a large point batch requires HttpTransport.putBytes.",
+      );
+    }
+    const ticket = await this.createCustomIndicatorUpload(customIndicatorId, {
+      fileName: `${customIndicatorId}-points.jsonl`,
+      format: "jsonl",
+      sizeBytes: payload.length,
+      idempotencyKey,
+    });
+    const jobId = String(ticket.jobId);
+    // No upload URL means this batch already reached the server on an earlier
+    // attempt, so resume at polling instead of re-sending it.
+    if (ticket.uploadUrl) {
+      const headers = ticket.headers;
+      const contentType =
+        isJsonObject(headers) && typeof headers["Content-Type"] === "string"
+          ? headers["Content-Type"]
+          : "application/x-ndjson";
+      await this.transport.putBytes(String(ticket.uploadUrl), payload, {
+        contentType,
+      });
+      await this.completeCustomIndicatorUpload(customIndicatorId, jobId);
+    }
+    return this.waitForCustomIndicatorUpload(customIndicatorId, jobId);
   }
 
   async createBacktests(
@@ -1067,6 +1512,18 @@ function backtestInput(item: JsonObject): JsonObject {
   return normalized;
 }
 
+function customIndicatorOf(response: JsonObject): JsonObject {
+  const indicator = response.indicator;
+  if (!isJsonObject(indicator) || !indicator.customIndicatorId) {
+    throw new NexusTradeApiError(
+      NO_HTTP_STATUS,
+      "invalid_response",
+      "Custom indicator response is missing indicator.",
+    );
+  }
+  return indicator;
+}
+
 function operationOf(response: JsonObject): JsonObject {
   const operation = response.operation;
   if (!isJsonObject(operation)) {
@@ -1082,6 +1539,17 @@ function operationOf(response: JsonObject): JsonObject {
 /** @internal PortfolioHandle lazy-client attachment. */
 export function clientTransport(client: NexusTradeClient): Transport {
   return (client as unknown as { transport: Transport }).transport;
+}
+
+/** Convenience wrapper for scripts that do not need a persistent client. */
+export async function createCustomIndicator(
+  indicator: CustomIndicatorInput,
+  options: { idempotencyKey: string; client?: NexusTradeClient },
+): Promise<JsonObject> {
+  const client = options.client ?? NexusTradeClient.fromEnvironment();
+  return client.createCustomIndicator(indicator, {
+    idempotencyKey: options.idempotencyKey,
+  });
 }
 
 /** Convenience wrapper for scripts that do not need a persistent client. */

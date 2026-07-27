@@ -30,7 +30,7 @@ import {
   NexusTradeClient, always, backtest, buy, portfolio, stockAsset, strategy,
 } from "nexustrade";
 
-const nt = new NexusTradeClient({
+const client = new NexusTradeClient({
   apiKey: "sk-...",
   baseUrl: "https://nexustrade.io/api/v1",
 });
@@ -39,11 +39,11 @@ const book = portfolio("Example", [
   strategy("Buy SPY", always(), buy(stockAsset("SPY"), 100)),
 ]);
 
-const operation = await nt.createBacktest(
+const operation = await client.createBacktest(
   backtest(book, { startDate: "2024-01-01", endDate: "2024-12-31" }),
   { idempotencyKey: "example-v1" },
 );
-const result = await nt.waitForBacktest(operation.id as string);
+const result = await client.waitForBacktest(operation.id as string);
 console.log(result.result);
 ```
 
@@ -134,7 +134,7 @@ Every job kind reports the same envelope, so one poller serves all of them:
 ```
 
 ```ts
-const finished = await nt.waitForBacktest(operation.id as string);
+const finished = await client.waitForBacktest(operation.id as string);
 ```
 
 | Option | Default | Meaning |
@@ -154,7 +154,7 @@ over a loop: one request, one idempotency key, one rate-limit slot.
 **Optimization and walk-forward** follow the identical shape:
 
 ```ts
-const study = await nt.createWalkForward(
+const study = await client.createWalkForward(
   nt.walkForward(book, {
     globalStartDate: "2022-01-01",
     globalEndDate: "2024-12-31",
@@ -162,8 +162,76 @@ const study = await nt.createWalkForward(
   }),
   { idempotencyKey: "wf-v1" },
 );
-await nt.waitForWalkForward(study.id as string);
+await client.waitForWalkForward(study.id as string);
 ```
+
+## Your own data
+
+A custom data source is a time series you own — sentiment counts, a proprietary
+factor, anything the platform does not already carry. Create one, then reference
+it from a strategy with `CustomIndicator`.
+
+```ts
+const series = await client.createCustomIndicator(
+  {
+    name: "WSB NVDA Mentions",
+    scope: "asset",
+    description: "Daily r/wallstreetbets mentions",
+    points: [
+      { timestamp: "2024-04-01", value: 152, ticker: "NVDA" },
+      { timestamp: "2024-04-02", value: 90, ticker: "NVDA" },
+    ],
+  },
+  { idempotencyKey: "wsb-mentions-v1" },
+);
+
+const busy = nt.gt(
+  nt.CustomIndicator(nt.stockAsset("NVDA"), String(series.customIndicatorId)),
+  100,
+);
+const book = nt.portfolio("Attention", [
+  nt.strategy("Buy the buzz", busy, nt.buy(nt.stockAsset("NVDA"), 25)),
+]);
+```
+
+`scope` is `"global"` (one series) or `"asset"` (one series per ticker, so every
+point needs a `ticker`). It cannot be changed after creation.
+
+**Size is not a constraint.** `points` is unlimited. A batch that fits the
+request goes with it; a larger one is uploaded to storage and validated before
+the call resolves. Either way the returned indicator reflects what actually
+landed, and an upload that fails validation rejects rather than reporting
+success.
+
+**Growing a series.** Append to the same id every run:
+
+```ts
+await client.appendCustomIndicatorPoints(
+  String(series.customIndicatorId),
+  [{ timestamp: "2024-04-03", value: 118, ticker: "NVDA" }],
+  { idempotencyKey: "wsb-mentions-2024-04-03" },
+);
+```
+
+Creating a fresh series per run splits the history into fragments no strategy
+can read. Re-sending an identical batch is safe — the duplicate is not written
+twice.
+
+| Call | Purpose |
+| --- | --- |
+| `createCustomIndicator(spec, { idempotencyKey })` | Create, optionally seeded |
+| `appendCustomIndicatorPoints(id, points, { idempotencyKey })` | Add points |
+| `listCustomIndicators()` / `getCustomIndicator(id)` | Discover ids and coverage |
+
+Points accept `timestamp`, `value`, `ticker`, `assetType`, and `availableAt`
+— camelCase or snake_case, with `Date` objects allowed. Set `availableAt` when a
+value became knowable later than it is dated: an earnings figure stamped to
+quarter-end but published weeks after. An unrecognized field throws rather than
+being silently dropped.
+
+To hand over a file you already have on disk, `createCustomIndicatorUpload` /
+`completeCustomIndicatorUpload` / `waitForCustomIndicatorUpload` expose the
+three steps directly. CSV, JSON, and JSONL up to 100 MB.
 
 ## Agent runs
 
@@ -204,7 +272,7 @@ sequenceDiagram
 ```
 
 ```ts
-const run = await nt.createAgent("Find momentum names in the S&P 500", {
+const run = await client.createAgent("Find momentum names in the S&P 500", {
   idempotencyKey: "momentum-scan-v1",
 });
 for await (const event of run) {
@@ -229,7 +297,7 @@ flowchart LR
 ```
 
 ```ts
-const query = await nt.createLakeQuery(
+const query = await client.createLakeQuery(
   {
     query: "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
     params: ["AAPL"],
@@ -237,8 +305,8 @@ const query = await nt.createLakeQuery(
   },
   { idempotencyKey: "aapl-daily-v1" },
 );
-const finished = await nt.waitForLakeQuery(query.id as string);
-const manifest = await nt.getLakeQueryManifest(finished.id as string);
+const finished = await client.waitForLakeQuery(query.id as string);
+const manifest = await client.getLakeQueryManifest(finished.id as string);
 ```
 
 Use the manifest plus `downloadLakeQueryPart` to stream results within your own
@@ -254,7 +322,7 @@ Create a key at **[nexustrade.io/developers](https://nexustrade.io/developers)**
 (Profile → API Keys). Keys start with `sk-` and are shown once.
 
 ```ts
-const nt = new NexusTradeClient({
+const client = new NexusTradeClient({
   apiKey: "sk-...",
   baseUrl: "https://nexustrade.io/api/v1",
 });
@@ -301,7 +369,7 @@ the original resource instead of launching a second paid job — so a retry afte
 a network failure is free.
 
 ```ts
-await nt.createBacktest(handle, { idempotencyKey: "momentum-2024-v1" });
+await client.createBacktest(handle, { idempotencyKey: "momentum-2024-v1" });
 ```
 
 ## Errors
@@ -310,7 +378,7 @@ await nt.createBacktest(handle, { idempotencyKey: "momentum-2024-v1" });
 import { NexusTradeApiError } from "nexustrade";
 
 try {
-  await nt.createBacktest(handle, { idempotencyKey: "run-1" });
+  await client.createBacktest(handle, { idempotencyKey: "run-1" });
 } catch (error) {
   if (error instanceof NexusTradeApiError && error.code === "rate_limit_exceeded") {
     // back off

@@ -32,6 +32,8 @@ interface ConformanceCase {
   name: string;
   method: string;
   input: JsonValue;
+  /** Positional arguments that precede `input`. */
+  args?: JsonValue[];
   idempotency_key?: string;
   responses: JsonObject[];
   expected_calls: ExpectedCall[];
@@ -50,6 +52,7 @@ const CASES_PATH = join(
 );
 const NO_BODY_METHODS = new Set([
   "get_backtest",
+  "get_custom_indicator",
   "get_optimization",
   "get_walk_forward",
 ]);
@@ -107,13 +110,16 @@ function invoke(
     `client is missing ${String(name)} (fixture case "${testCase.name}")`,
   );
   const call = method as (...args: unknown[]) => Promise<JsonValue>;
+  const leading = testCase.args ?? [];
   if (WAIT_METHODS.has(testCase.method)) {
-    return call.call(client, testCase.input, { pollIntervalSeconds: 0 });
+    return call.call(client, ...leading, testCase.input, {
+      pollIntervalSeconds: 0,
+    });
   }
   if (NO_BODY_METHODS.has(testCase.method)) {
-    return call.call(client, testCase.input);
+    return call.call(client, ...leading, testCase.input);
   }
-  return call.call(client, testCase.input, {
+  return call.call(client, ...leading, testCase.input, {
     idempotencyKey: testCase.idempotency_key,
   });
 }
