@@ -116,6 +116,14 @@ function stdoutIsInteractive(): boolean {
 // Point batches larger than this are uploaded rather than sent inline.
 const MAX_INLINE_POINT_BYTES = 512 * 1024;
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+// A presigned PUT crosses the open internet with no API-side retry behind it, so
+// the client owns transient recovery. Jittered (unlike the poll backoff) because
+// every client retrying a storage blip on the same schedule is the blip.
+// checkSdkClientParity.ts asserts these match the Python SDK.
+export const MAX_UPLOAD_PUT_ATTEMPTS = 5;
+export const UPLOAD_PUT_INITIAL_BACKOFF_SECONDS = 0.5;
+export const UPLOAD_PUT_MAX_BACKOFF_SECONDS = 8.0;
+export const UPLOAD_PUT_JITTER_SECONDS = 0.25;
 const POINT_FIELDS: Record<string, string> = {
   timestamp: "timestamp",
   value: "value",
@@ -148,6 +156,24 @@ export class NexusTradeApiError extends Error {
     this.code = code;
     this.operationId = operationId;
   }
+}
+
+function isRetryableUploadHttpStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+/** Only a transport fault or a storage-side transient earns another PUT. */
+function isRetryableUploadError(error: unknown): boolean {
+  if (!(error instanceof NexusTradeApiError)) {
+    return false;
+  }
+  if (error.code === "transport_error") {
+    return true;
+  }
+  if (error.code === "upload_failed" && error.status !== NO_HTTP_STATUS) {
+    return isRetryableUploadHttpStatus(error.status);
+  }
+  return false;
 }
 
 interface Origin {
@@ -361,6 +387,31 @@ export class HttpTransport implements Transport, UploadTransport {
 
   /** PUT a payload to a presigned storage URL. Sends no credential. */
   async putBytes(
+    url: string,
+    data: Uint8Array<ArrayBuffer>,
+    options: { contentType: string },
+  ): Promise<void> {
+    let delaySeconds = UPLOAD_PUT_INITIAL_BACKOFF_SECONDS;
+    for (let attempt = 0; attempt < MAX_UPLOAD_PUT_ATTEMPTS; attempt++) {
+      try {
+        await this.#putBytesOnce(url, data, options);
+        return;
+      } catch (error) {
+        if (
+          attempt >= MAX_UPLOAD_PUT_ATTEMPTS - 1 ||
+          !isRetryableUploadError(error)
+        ) {
+          throw error;
+        }
+      }
+      delaySeconds = Math.min(delaySeconds * 2, UPLOAD_PUT_MAX_BACKOFF_SECONDS);
+      await sleep(
+        (delaySeconds + Math.random() * UPLOAD_PUT_JITTER_SECONDS) * 1000,
+      );
+    }
+  }
+
+  async #putBytesOnce(
     url: string,
     data: Uint8Array<ArrayBuffer>,
     options: { contentType: string },

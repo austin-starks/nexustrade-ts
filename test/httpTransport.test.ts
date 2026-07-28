@@ -268,6 +268,49 @@ describe("HttpTransport", () => {
     );
   });
 
+  it("retries a presigned PUT through a transient connection reset", async () => {
+    let attempts = 0;
+    stubFetch(() => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new TypeError("fetch failed: ECONNRESET");
+      }
+      return new Response(null, { status: 204 });
+    });
+
+    await new HttpTransport({ apiKey: "sk-temp", baseUrl: BASE_URL }).putBytes(
+      "https://storage.example/put",
+      new Uint8Array([114, 111, 119, 115]),
+      { contentType: "application/x-ndjson" },
+    );
+
+    assert.equal(attempts, 2);
+  });
+
+  it("does not retry a permanently rejected presigned PUT", async () => {
+    let attempts = 0;
+    stubFetch(() => {
+      attempts += 1;
+      return new Response("denied", { status: 403 });
+    });
+
+    await assert.rejects(
+      () =>
+        new HttpTransport({ apiKey: "sk-temp", baseUrl: BASE_URL }).putBytes(
+          "https://storage.example/put",
+          new Uint8Array([114, 111, 119, 115]),
+          { contentType: "application/x-ndjson" },
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof NexusTradeApiError);
+        assert.equal(error.code, "upload_failed");
+        assert.equal(error.status, 403);
+        return true;
+      },
+    );
+    assert.equal(attempts, 1);
+  });
+
   it("does not leak the API key when the transport is stringified", () => {
     const transport = new HttpTransport({
       apiKey: "sk-temp",
