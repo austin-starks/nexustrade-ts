@@ -83,6 +83,17 @@ export interface GreekFilter {
   minVega?: number; maxVega?: number;
   minRho?: number; maxRho?: number;
 }
+/** Bid/ask constraints applied with `greekFilter` during resolution; a candidate must pass both. */
+export interface LiquidityFilter {
+  /** Max (ask-bid)/mid. Preferred: $0.50 is 50% of a $1.00 contract, 1.7% of a $30.00 one. */
+  maxSpreadPct?: number;
+  /** Max ask-bid in dollars. When both bounds are set, both must pass. */
+  maxSpreadAbsolute?: number;
+  /** Minimum bid — excludes contracts you cannot sell into. */
+  minBid?: number;
+  /** Reject candidates with no real NBBO. Defaults to true; keep it true. */
+  requireRealQuote?: boolean;
+}
 export interface OptionsBuilderLeg {
   optionType: OptionType;
   direction: OptionDirection;
@@ -94,6 +105,7 @@ export interface OptionsBuilderLeg {
   expirationRange?: ExpirationRange;
   ratio?: number;
   greekFilter?: GreekFilter;
+  liquidityFilter?: LiquidityFilter;
 }
 /** Shared fields for `leg(...)` (discriminated on distanceType). */
 export type LegConfigBase = {
@@ -106,6 +118,7 @@ export type LegConfigBase = {
   expirationRange?: ExpirationRange;
   ratio?: number;
   greekFilter?: GreekFilter;
+  liquidityFilter?: LiquidityFilter;
 };
 /** Percent/dollars strike — fallback optional. */
 export type LegConfigPercentOrDollars = LegConfigBase & {
@@ -530,6 +543,7 @@ export const leg = (config: LegConfig): OptionsBuilderLeg => {
     expirationRange: config.expirationRange,
     ratio: config.ratio,
     greekFilter: config.greekFilter,
+    liquidityFilter: config.liquidityFilter,
   }) as OptionsBuilderLeg;
 };
 
