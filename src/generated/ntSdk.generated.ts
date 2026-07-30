@@ -91,8 +91,6 @@ export interface LiquidityFilter {
   maxSpreadAbsolute?: number;
   /** Minimum bid — excludes contracts you cannot sell into. */
   minBid?: number;
-  /** Reject candidates with no real NBBO. Defaults to true; keep it true. */
-  requireRealQuote?: boolean;
 }
 export interface OptionsBuilderLeg {
   optionType: OptionType;
