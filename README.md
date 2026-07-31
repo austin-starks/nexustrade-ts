@@ -254,6 +254,14 @@ const result = await client.createOrders(
      side: "BUY", quantity: 10, orderType: "MARKET" }],
   { idempotencyKey: "rebalance-2024-04-01" },
 );
+
+// Dollar notional (stock/crypto only — options require contract quantity):
+await client.createOrders(
+  portfolioId,
+  [{ asset: { name: "AAPL", type: "STOCK", symbol: "AAPL" },
+     side: "BUY", amount: 500, orderType: "MARKET" }],
+  { idempotencyKey: "buy-aapl-500" },
+);
 ```
 
 **Paper orders are accepted immediately. Live orders are staged for approval
