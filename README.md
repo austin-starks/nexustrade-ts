@@ -47,6 +47,10 @@ const result = await client.waitForBacktest(operation.id as string);
 console.log(result.result);
 ```
 
+Backtest operations may include `warnings: string[]` immediately after
+submission and again in the terminal `result`. Treat them as material caveats;
+they do not change a successful operation into a failure.
+
 ## Authoring strategies
 
 Every builder is generated from the same indicator specification the NexusTrade
