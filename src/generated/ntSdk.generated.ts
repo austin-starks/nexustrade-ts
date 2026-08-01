@@ -1970,7 +1970,7 @@ export const geneSubject = (values: AssetArg[][]): Gene => ({
 });
 
 /** Sweep EntryCondition (Strategy scope) over a value set. */
-export const geneEntryCondition = (strategyIndex: number, values: Condition[]): Gene => ({
+export const geneEntryCondition = (strategyIndex: number, values: { label: string; condition: Condition }[]): Gene => ({
   field: "EntryCondition",
   scope: "Strategy",
   target: { scope: "Strategy", field: "EntryCondition", strategyIndex },
@@ -1978,7 +1978,7 @@ export const geneEntryCondition = (strategyIndex: number, values: Condition[]): 
 });
 
 /** Sweep ExitCondition (Strategy scope) over a value set. */
-export const geneExitCondition = (strategyIndex: number, values: Condition[]): Gene => ({
+export const geneExitCondition = (strategyIndex: number, values: { label: string; condition: Condition }[]): Gene => ({
   field: "ExitCondition",
   scope: "Strategy",
   target: { scope: "Strategy", field: "ExitCondition", strategyIndex },
@@ -1994,7 +1994,7 @@ export const geneEntryCooldownDays = (strategyIndex: number, values: number[]): 
 });
 
 /** Sweep RankSignal (Action scope) over a value set. */
-export const geneRankSignal = (strategyIndex: number, values: { indicator: Indicator; direction: SweepSortDirection }[]): Gene => ({
+export const geneRankSignal = (strategyIndex: number, values: { label: string; indicator: Indicator; direction: SweepSortDirection }[]): Gene => ({
   field: "RankSignal",
   scope: "Action",
   target: { scope: "Action", field: "RankSignal", strategyIndex },
@@ -2090,7 +2090,7 @@ export const geneSelectTopLimit = (strategyIndex: number, stageIndex: number, va
 });
 
 /** Sweep UniversePipelineFilter (UniversePipeline scope) over a value set. */
-export const geneUniversePipelineFilter = (strategyIndex: number, stageIndex: number, values: Condition[]): Gene => ({
+export const geneUniversePipelineFilter = (strategyIndex: number, stageIndex: number, values: { label: string; condition: Condition }[]): Gene => ({
   field: "UniversePipelineFilter",
   scope: "UniversePipeline",
   target: { scope: "UniversePipeline", field: "UniversePipelineFilter", strategyIndex, stageIndex },
