@@ -672,6 +672,8 @@ export interface CustomIndicatorInput {
   name: string;
   description?: string;
   scope?: "global" | "asset";
+  pointKind?: "observation" | "period_aggregate" | "disclosed";
+  aggregatePeriod?: "1d" | "1w" | "1mo" | "1q";
   points?: ReadonlyArray<CustomIndicatorPointInput>;
 }
 
@@ -717,6 +719,162 @@ function customIndicatorPoints(
     throw new Error("points must be an array of point objects.");
   }
   return points.map(customIndicatorPoint);
+}
+
+type IndicatorPointKind = NonNullable<CustomIndicatorInput["pointKind"]>;
+type IndicatorAggregatePeriod = NonNullable<
+  CustomIndicatorInput["aggregatePeriod"]
+>;
+
+function dateOnly(value: JsonValue | undefined): Date | undefined {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return undefined;
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+    ? undefined
+    : parsed;
+}
+
+function utcMidnight(day: Date): string {
+  return `${day.toISOString().slice(0, 10)}T00:00:00.000Z`;
+}
+
+function utcDateTime(value: JsonValue | undefined): Date | undefined {
+  const day = dateOnly(value);
+  if (day) return day;
+  if (typeof value !== "string") return undefined;
+  const hasExplicitZone =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/i.test(
+      value
+    );
+  if (!hasExplicitZone) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function addUtcDays(day: Date, days: number): Date {
+  return new Date(
+    Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate() + days)
+  );
+}
+
+function pointKindPoints(
+  points: JsonObject[],
+  pointKind?: IndicatorPointKind,
+  aggregatePeriod?: IndicatorAggregatePeriod
+): JsonObject[] {
+  if (!pointKind) {
+    if (aggregatePeriod) {
+      throw new Error("aggregatePeriod requires pointKind period_aggregate.");
+    }
+    return points;
+  }
+  if (pointKind !== "period_aggregate" && aggregatePeriod) {
+    throw new Error("aggregatePeriod is only valid for period_aggregate.");
+  }
+  if (pointKind === "period_aggregate" && !aggregatePeriod) {
+    throw new Error("period_aggregate requires aggregatePeriod.");
+  }
+
+  return points.map((point, index) => {
+    const row = { ...point };
+    const eventDay = dateOnly(row.timestamp);
+    const availableDay = dateOnly(row.availableAt);
+    const eventTime = utcDateTime(row.timestamp);
+    const availableTime = utcDateTime(row.availableAt);
+    if (pointKind === "observation") {
+      if (row.availableAt === undefined) {
+        row.availableAt = eventDay ? utcMidnight(eventDay) : row.timestamp;
+      } else if (eventDay && availableDay?.getTime() === eventDay.getTime()) {
+        row.availableAt = utcMidnight(eventDay);
+      } else if (availableDay) {
+        row.availableAt = utcMidnight(addUtcDays(availableDay, 1));
+      }
+      if (
+        eventTime &&
+        availableTime &&
+        availableTime.toISOString().slice(0, 10) >
+          eventTime.toISOString().slice(0, 10)
+      ) {
+        throw new Error(
+          `Point ${index + 1}: observation availableAt is after the event date.`
+        );
+      }
+      return row;
+    }
+    if (pointKind === "disclosed") {
+      if (row.availableAt === undefined) {
+        throw new Error(
+          `Point ${index + 1}: disclosed pointKind requires availableAt.`
+        );
+      }
+      if (availableDay) {
+        row.availableAt = utcMidnight(addUtcDays(availableDay, 1));
+      }
+      return row;
+    }
+    if (!eventTime) {
+      throw new Error(
+        `Point ${index + 1}: aggregate timestamp must be date-only or include an explicit UTC offset.`
+      );
+    }
+    if (
+      eventTime.getUTCHours() !== 0 ||
+      eventTime.getUTCMinutes() !== 0 ||
+      eventTime.getUTCSeconds() !== 0 ||
+      eventTime.getUTCMilliseconds() !== 0
+    ) {
+      throw new Error(
+        `Point ${index + 1}: aggregate timestamp must be UTC midnight.`
+      );
+    }
+
+    let periodEnd: Date;
+    if (aggregatePeriod === "1d") {
+      periodEnd = addUtcDays(eventTime, 1);
+    } else if (aggregatePeriod === "1w") {
+      if (eventTime.getUTCDay() !== 1) {
+        throw new Error(`Point ${index + 1}: 1w timestamp must be a Monday.`);
+      }
+      periodEnd = addUtcDays(eventTime, 7);
+    } else if (aggregatePeriod === "1mo") {
+      if (eventTime.getUTCDate() !== 1) {
+        throw new Error(`Point ${index + 1}: 1mo timestamp must be month start.`);
+      }
+      periodEnd = new Date(
+        Date.UTC(eventTime.getUTCFullYear(), eventTime.getUTCMonth() + 1, 1)
+      );
+    } else {
+      if (
+        eventTime.getUTCDate() !== 1 ||
+        ![0, 3, 6, 9].includes(eventTime.getUTCMonth())
+      ) {
+        throw new Error(`Point ${index + 1}: 1q timestamp must be quarter start.`);
+      }
+      periodEnd = new Date(
+        Date.UTC(eventTime.getUTCFullYear(), eventTime.getUTCMonth() + 3, 1)
+      );
+    }
+    const derived = utcMidnight(periodEnd);
+    if (row.availableAt === undefined) {
+      row.availableAt = derived;
+    } else if (availableDay) {
+      const explicit = utcMidnight(addUtcDays(availableDay, 1));
+      if (explicit < derived) {
+        throw new Error(
+          `Point ${index + 1}: availableAt precedes the aggregate close.`
+        );
+      }
+      row.availableAt = explicit;
+    } else if (availableTime && availableTime.getTime() < periodEnd.getTime()) {
+      throw new Error(
+        `Point ${index + 1}: availableAt precedes the aggregate close.`
+      );
+    }
+    return row;
+  });
 }
 
 function pointsJsonl(
@@ -989,7 +1147,15 @@ export class NexusTradeClient {
     indicator: CustomIndicatorInput,
     options: { idempotencyKey: string }
   ): Promise<JsonObject> {
-    const { name, description, scope, points, ...rest } = indicator;
+    const {
+      name,
+      description,
+      scope,
+      pointKind,
+      aggregatePeriod,
+      points,
+      ...rest
+    } = indicator;
     if (typeof name !== "string" || !name.trim()) {
       throw new Error("createCustomIndicator requires a name.");
     }
@@ -997,13 +1163,19 @@ export class NexusTradeClient {
     if (unknown.length > 0) {
       throw new Error(
         `Unknown custom indicator field(s): ${unknown.sort().join(", ")}. ` +
-          "Expected name, description, scope, and points."
+          "Expected name, description, scope, pointKind, aggregatePeriod, and points."
       );
     }
-    const normalized = points ? customIndicatorPoints(points) : [];
+    const normalized = pointKindPoints(
+      points ? customIndicatorPoints(points) : [],
+      pointKind,
+      aggregatePeriod
+    );
     const body: JsonObject = { name: name.trim() };
     if (description !== undefined) body.description = description;
     if (scope !== undefined) body.scope = scope;
+    if (pointKind !== undefined) body.pointKind = pointKind;
+    if (aggregatePeriod !== undefined) body.aggregatePeriod = aggregatePeriod;
     const inline =
       normalized.length > 0 &&
       inlinePointBytes(normalized) <= MAX_INLINE_POINT_BYTES;
@@ -1079,9 +1251,17 @@ export class NexusTradeClient {
   async appendCustomIndicatorPoints(
     customIndicatorId: string,
     points: ReadonlyArray<CustomIndicatorPointInput>,
-    options: { idempotencyKey: string }
+    options: {
+      idempotencyKey: string;
+      pointKind?: IndicatorPointKind;
+      aggregatePeriod?: IndicatorAggregatePeriod;
+    }
   ): Promise<JsonObject> {
-    const normalized = customIndicatorPoints(points);
+    const normalized = pointKindPoints(
+      customIndicatorPoints(points),
+      options.pointKind,
+      options.aggregatePeriod
+    );
     if (normalized.length === 0) {
       throw new Error("appendCustomIndicatorPoints needs at least one point.");
     }
@@ -1089,7 +1269,16 @@ export class NexusTradeClient {
       const response = await this.transport.request(
         "POST",
         `custom-indicators/${encodePathSegment(customIndicatorId)}/points`,
-        { body: { points: normalized }, idempotencyKey: options.idempotencyKey }
+        {
+          body: {
+            points: normalized,
+            ...(options.pointKind ? { pointKind: options.pointKind } : {}),
+            ...(options.aggregatePeriod
+              ? { aggregatePeriod: options.aggregatePeriod }
+              : {}),
+          },
+          idempotencyKey: options.idempotencyKey,
+        }
       );
       const indicator = response.indicator;
       if (!isJsonObject(indicator)) {
@@ -1116,9 +1305,18 @@ export class NexusTradeClient {
   async replaceCustomIndicatorPoints(
     customIndicatorId: string,
     points: ReadonlyArray<CustomIndicatorPointInput>,
-    options: { idempotencyKey: string; allowShrink?: boolean }
+    options: {
+      idempotencyKey: string;
+      allowShrink?: boolean;
+      pointKind?: IndicatorPointKind;
+      aggregatePeriod?: IndicatorAggregatePeriod;
+    }
   ): Promise<JsonObject> {
-    const normalized = customIndicatorPoints(points);
+    const normalized = pointKindPoints(
+      customIndicatorPoints(points),
+      options.pointKind,
+      options.aggregatePeriod
+    );
     if (normalized.length === 0) {
       throw new Error("replaceCustomIndicatorPoints needs at least one point.");
     }
@@ -1131,6 +1329,10 @@ export class NexusTradeClient {
             body: {
               points: normalized,
               allowShrink: options.allowShrink === true,
+              ...(options.pointKind ? { pointKind: options.pointKind } : {}),
+              ...(options.aggregatePeriod
+                ? { aggregatePeriod: options.aggregatePeriod }
+                : {}),
             },
             idempotencyKey: options.idempotencyKey,
           }

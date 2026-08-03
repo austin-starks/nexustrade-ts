@@ -529,6 +529,99 @@ describe("custom indicators", () => {
     ]);
   });
 
+  it("materializes same-day observation availability", async () => {
+    const transport = new FakeTransport([
+      { indicator: { customIndicatorId: "ci-1" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.createCustomIndicator(
+      {
+        name: "Observed",
+        pointKind: "observation",
+        points: [
+          {
+            timestamp: "2024-04-05",
+            availableAt: "2024-04-05",
+            value: 3,
+          },
+        ],
+      },
+      { idempotencyKey: "observed-v1" }
+    );
+
+    assert.equal(transport.calls[0].body?.pointKind, "observation");
+    assert.deepEqual(transport.calls[0].body?.points, [
+      {
+        timestamp: "2024-04-05",
+        availableAt: "2024-04-05T00:00:00.000Z",
+        value: 3,
+      },
+    ]);
+  });
+
+  it("uses the same observation availability contract for large uploads", async () => {
+    const points = Array.from({ length: 20_000 }, (_, index) => ({
+      timestamp: `2024-04-${String((index % 28) + 1).padStart(2, "0")}`,
+      availableAt: `2024-04-${String((index % 28) + 1).padStart(2, "0")}`,
+      value: index,
+      ticker: `TCK${String(index).padStart(5, "0")}`,
+    }));
+    const transport = new UploadingTransport([
+      { indicator: { customIndicatorId: "ci-1", pointCount: 0 } },
+      {
+        ticket: {
+          jobId: "job-1",
+          uploadUrl: "https://storage.example/put",
+          headers: { "Content-Type": "application/x-ndjson" },
+        },
+      },
+      { operation: { id: "job-1", status: "queued" } },
+      {
+        operation: {
+          id: "job-1",
+          status: "completed",
+          result: { acceptedRows: points.length },
+        },
+      },
+      { indicator: { customIndicatorId: "ci-1", pointCount: points.length } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.createCustomIndicator(
+      { name: "Observed big", scope: "asset", pointKind: "observation", points },
+      { idempotencyKey: "observed-big-v1" }
+    );
+
+    const firstRow = JSON.parse(
+      new TextDecoder().decode(transport.uploads[0].data).split("\n")[0]
+    ) as Record<string, unknown>;
+    assert.equal(firstRow.availableAt, "2024-04-01T00:00:00.000Z");
+    assert.equal(transport.calls[0].body?.pointKind, "observation");
+  });
+
+  it("derives period availability from a full UTC timestamp", async () => {
+    const transport = new FakeTransport([
+      { indicator: { customIndicatorId: "ci-1" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.createCustomIndicator(
+      {
+        name: "Daily close",
+        pointKind: "period_aggregate",
+        aggregatePeriod: "1d",
+        points: [{ timestamp: "2024-04-05T00:00:00Z", value: 3 }],
+      },
+      { idempotencyKey: "daily-close-v1" }
+    );
+
+    const points = transport.calls[0].body?.points as Array<
+      Record<string, unknown>
+    >;
+    assert.equal(points[0].availableAt, "2024-04-06T00:00:00.000Z");
+  });
+
   it("passes the archive filter when listing", async () => {
     const transport = new FakeTransport([
       { indicators: [{ customIndicatorId: "ci-1" }] },

@@ -136,6 +136,15 @@ await client.createCustomIndicator(
 Point batches are unlimited in size; the SDK sends them inline or uploads them.
 Do not chunk by hand.
 
+Declare `pointKind: "observation"` for point-in-time samples so date-only rows
+retain same-day UTC availability on both inline and large-upload paths. Use
+`period_aggregate` plus `aggregatePeriod` for closed periods, or `disclosed`
+with per-row publication times.
+
+For daily market prices, prefer `lake.query("sec_daily_ohlc", ...)` or the
+canonical OHLC helper. `daily_ohlc` is a legacy/vendor table and may lag the
+canonical daily series.
+
 ## Recipes
 
 <details open>
