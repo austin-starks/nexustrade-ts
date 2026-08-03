@@ -7,10 +7,7 @@
 
 import { AgentRun } from "./agent.ts";
 import { LazyDotenv, environmentValue } from "./env.ts";
-import type {
-  JobRequest,
-  Portfolio,
-} from "./generated/ntSdk.generated.js";
+import type { JobRequest, Portfolio } from "./generated/ntSdk.generated.js";
 import {
   PortfolioHandle,
   type DeployResult,
@@ -148,7 +145,7 @@ export class NexusTradeApiError extends Error {
     status: number,
     code: string,
     message: string,
-    operationId?: string,
+    operationId?: string
   ) {
     super(`${code}: ${message}`);
     this.name = "NexusTradeApiError";
@@ -207,7 +204,7 @@ export interface Transport {
   request(
     method: string,
     path: string,
-    options?: RequestOptions,
+    options?: RequestOptions
   ): Promise<JsonObject>;
 }
 
@@ -223,14 +220,12 @@ export interface BinaryTransport extends Transport {
   requestBytes(
     method: string,
     path: string,
-    options?: { byteRange?: [number, number]; maxBytes?: number },
+    options?: { byteRange?: [number, number]; maxBytes?: number }
   ): Promise<Uint8Array>;
 }
 
 function supportsBinary(transport: Transport): transport is BinaryTransport {
-  return (
-    typeof (transport as BinaryTransport).requestBytes === "function"
-  );
+  return typeof (transport as BinaryTransport).requestBytes === "function";
 }
 
 /**
@@ -242,7 +237,7 @@ export interface UploadTransport extends Transport {
   putBytes(
     url: string,
     data: Uint8Array<ArrayBuffer>,
-    options: { contentType: string },
+    options: { contentType: string }
   ): Promise<void>;
 }
 
@@ -262,7 +257,7 @@ function assertValidApiKey(apiKey: string): void {
     apiKey.length === 0 ||
     [...apiKey].some(
       (character) =>
-        /\s/.test(character) || (character.codePointAt(0) ?? 0) < 32,
+        /\s/.test(character) || (character.codePointAt(0) ?? 0) < 32
     );
   if (invalid) {
     throw new Error("NexusTrade apiKey must be a non-empty token.");
@@ -281,11 +276,11 @@ function assertValidBaseUrl(baseUrl: string): void {
   }
   const scheme = parsed.protocol.replace(":", "").toLowerCase();
   const isLoopback = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(
-    parsed.hostname.toLowerCase(),
+    parsed.hostname.toLowerCase()
   );
   if (scheme !== "https" && !(scheme === "http" && isLoopback)) {
     throw new Error(
-      "NexusTrade baseUrl must use HTTPS (HTTP is allowed only for loopback development).",
+      "NexusTrade baseUrl must use HTTPS (HTTP is allowed only for loopback development)."
     );
   }
   if (parsed.username || parsed.password) {
@@ -299,7 +294,7 @@ function assertValidBaseUrl(baseUrl: string): void {
 /** Reads at most `limit` bytes, so an oversized body is never fully buffered. */
 async function readCapped(
   response: Response,
-  limit: number,
+  limit: number
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   if (!response.body) {
     return { bytes: new Uint8Array(0), truncated: false };
@@ -339,7 +334,7 @@ function decodeJsonObject(bytes: Uint8Array, status: number): JsonObject {
     throw new NexusTradeApiError(
       status,
       "invalid_response",
-      "NexusTrade returned invalid JSON.",
+      "NexusTrade returned invalid JSON."
     );
   }
   let decoded: unknown;
@@ -349,14 +344,18 @@ function decodeJsonObject(bytes: Uint8Array, status: number): JsonObject {
     throw new NexusTradeApiError(
       status,
       "invalid_response",
-      "NexusTrade returned invalid JSON.",
+      "NexusTrade returned invalid JSON."
     );
   }
-  if (typeof decoded !== "object" || decoded === null || Array.isArray(decoded)) {
+  if (
+    typeof decoded !== "object" ||
+    decoded === null ||
+    Array.isArray(decoded)
+  ) {
     throw new NexusTradeApiError(
       status,
       "invalid_response",
-      "NexusTrade returned a non-object JSON response.",
+      "NexusTrade returned a non-object JSON response."
     );
   }
   return decoded as JsonObject;
@@ -389,7 +388,7 @@ export class HttpTransport implements Transport, UploadTransport {
   async putBytes(
     url: string,
     data: Uint8Array<ArrayBuffer>,
-    options: { contentType: string },
+    options: { contentType: string }
   ): Promise<void> {
     let delaySeconds = UPLOAD_PUT_INITIAL_BACKOFF_SECONDS;
     for (let attempt = 0; attempt < MAX_UPLOAD_PUT_ATTEMPTS; attempt++) {
@@ -406,7 +405,7 @@ export class HttpTransport implements Transport, UploadTransport {
       }
       delaySeconds = Math.min(delaySeconds * 2, UPLOAD_PUT_MAX_BACKOFF_SECONDS);
       await sleep(
-        (delaySeconds + Math.random() * UPLOAD_PUT_JITTER_SECONDS) * 1000,
+        (delaySeconds + Math.random() * UPLOAD_PUT_JITTER_SECONDS) * 1000
       );
     }
   }
@@ -414,7 +413,7 @@ export class HttpTransport implements Transport, UploadTransport {
   async #putBytesOnce(
     url: string,
     data: Uint8Array<ArrayBuffer>,
-    options: { contentType: string },
+    options: { contentType: string }
   ): Promise<void> {
     let parsed: URL;
     try {
@@ -423,20 +422,20 @@ export class HttpTransport implements Transport, UploadTransport {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "unsafe_upload_url",
-        "NexusTrade refused a malformed upload URL.",
+        "NexusTrade refused a malformed upload URL."
       );
     }
     if (parsed.protocol.toLowerCase() !== "https:") {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "unsafe_upload_url",
-        "NexusTrade refused a non-HTTPS upload URL.",
+        "NexusTrade refused a non-HTTPS upload URL."
       );
     }
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
-      this.#timeoutSeconds * 1000,
+      this.#timeoutSeconds * 1000
     );
     try {
       let response: Response;
@@ -450,11 +449,7 @@ export class HttpTransport implements Transport, UploadTransport {
         });
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        throw new NexusTradeApiError(
-          NO_HTTP_STATUS,
-          "transport_error",
-          reason,
-        );
+        throw new NexusTradeApiError(NO_HTTP_STATUS, "transport_error", reason);
       }
       if (!response.ok) {
         throw new NexusTradeApiError(
@@ -462,7 +457,7 @@ export class HttpTransport implements Transport, UploadTransport {
           "upload_failed",
           `Storage rejected the upload: ${
             response.statusText || `HTTP ${response.status}`
-          }.`,
+          }.`
         );
       }
     } finally {
@@ -473,9 +468,12 @@ export class HttpTransport implements Transport, UploadTransport {
   async request(
     method: string,
     path: string,
-    options: RequestOptions = {},
+    options: RequestOptions = {}
   ): Promise<JsonObject> {
-    const url = `${this.#baseUrl.replace(/\/+$/, "")}/nexustrade/${path.replace(/^\/+/, "")}`;
+    const url = `${this.#baseUrl.replace(/\/+$/, "")}/nexustrade/${path.replace(
+      /^\/+/,
+      ""
+    )}`;
     const payload =
       options.body !== undefined ? JSON.stringify(options.body) : undefined;
     const headers: Record<string, string> = {
@@ -490,7 +488,7 @@ export class HttpTransport implements Transport, UploadTransport {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
-      this.#timeoutSeconds * 1000,
+      this.#timeoutSeconds * 1000
     );
     try {
       let currentUrl = url;
@@ -505,9 +503,12 @@ export class HttpTransport implements Transport, UploadTransport {
             signal: controller.signal,
           });
         } catch (error) {
-          const reason =
-            error instanceof Error ? error.message : String(error);
-          throw new NexusTradeApiError(NO_HTTP_STATUS, "transport_error", reason);
+          const reason = error instanceof Error ? error.message : String(error);
+          throw new NexusTradeApiError(
+            NO_HTTP_STATUS,
+            "transport_error",
+            reason
+          );
         }
 
         if (response.status >= 300 && response.status < 400) {
@@ -516,7 +517,7 @@ export class HttpTransport implements Transport, UploadTransport {
             throw new NexusTradeApiError(
               response.status,
               "invalid_response",
-              "NexusTrade returned a redirect without a location.",
+              "NexusTrade returned a redirect without a location."
             );
           }
           const next = new URL(location, currentUrl).toString();
@@ -524,7 +525,7 @@ export class HttpTransport implements Transport, UploadTransport {
             throw new NexusTradeApiError(
               response.status,
               "unsafe_redirect",
-              "NexusTrade refused a cross-origin API redirect.",
+              "NexusTrade refused a cross-origin API redirect."
             );
           }
           // Never replay a mutation. Re-sending the body would double-submit a
@@ -534,14 +535,14 @@ export class HttpTransport implements Transport, UploadTransport {
             throw new NexusTradeApiError(
               response.status,
               "unsafe_redirect",
-              `NexusTrade refused to follow a redirect on a ${method} request.`,
+              `NexusTrade refused to follow a redirect on a ${method} request.`
             );
           }
           if (hop >= MAX_REDIRECTS) {
             throw new NexusTradeApiError(
               response.status,
               "transport_error",
-              "NexusTrade exceeded the SDK redirect limit.",
+              "NexusTrade exceeded the SDK redirect limit."
             );
           }
           currentUrl = next;
@@ -572,13 +573,13 @@ export class HttpTransport implements Transport, UploadTransport {
 
         const { bytes, truncated } = await readCapped(
           response,
-          MAX_RESPONSE_BYTES,
+          MAX_RESPONSE_BYTES
         );
         if (truncated) {
           throw new NexusTradeApiError(
             response.status,
             "response_too_large",
-            "NexusTrade response exceeded the SDK size limit.",
+            "NexusTrade response exceeded the SDK size limit."
           );
         }
         return decodeJsonObject(bytes, response.status);
@@ -619,7 +620,7 @@ function encodePathSegment(value: string): string {
   return encodeURIComponent(value).replace(
     /[!'()*]/g,
     (character) =>
-      `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+      `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`
   );
 }
 
@@ -633,9 +634,10 @@ export interface WaitOptions {
 function operationFailure(
   operation: JsonObject,
   operationId: string,
-  status: string,
+  status: string
 ): NexusTradeApiError {
-  let code = status === "cancelled" ? "operation_cancelled" : "operation_failed";
+  let code =
+    status === "cancelled" ? "operation_cancelled" : "operation_failed";
   let message = `Operation ${operationId} ${status}.`;
   const error = operation.error;
   if (isJsonObject(error)) {
@@ -690,7 +692,7 @@ function customIndicatorPoint(point: CustomIndicatorPointInput): JsonObject {
     if (target === undefined) {
       throw new Error(
         `Unknown custom indicator point field "${key}". Points accept ` +
-          "timestamp, value, ticker, assetType, and availableAt.",
+          "timestamp, value, ticker, assetType, and availableAt."
       );
     }
     if (value === undefined || value === null) continue;
@@ -709,7 +711,7 @@ function customIndicatorPoint(point: CustomIndicatorPointInput): JsonObject {
 }
 
 function customIndicatorPoints(
-  points: ReadonlyArray<CustomIndicatorPointInput>,
+  points: ReadonlyArray<CustomIndicatorPointInput>
 ): JsonObject[] {
   if (!Array.isArray(points)) {
     throw new Error("points must be an array of point objects.");
@@ -718,10 +720,10 @@ function customIndicatorPoints(
 }
 
 function pointsJsonl(
-  points: ReadonlyArray<JsonObject>,
+  points: ReadonlyArray<JsonObject>
 ): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(
-    points.map((point) => `${JSON.stringify(point)}\n`).join(""),
+    points.map((point) => `${JSON.stringify(point)}\n`).join("")
   );
 }
 
@@ -732,7 +734,7 @@ function inlinePointBytes(points: ReadonlyArray<JsonObject>): number {
 export async function waitForOperation(
   fetch: (operationId: string) => Promise<JsonObject>,
   operationId: string,
-  options: WaitOptions = {},
+  options: WaitOptions = {}
 ): Promise<JsonObject> {
   const timeoutSeconds = options.timeoutSeconds ?? DEFAULT_POLL_TIMEOUT_SECONDS;
   const pollIntervalSeconds =
@@ -768,7 +770,7 @@ export async function waitForOperation(
         `Operation ${operationId} was still '${status || "unknown"}' after ` +
           `${timeoutSeconds}s. It is still running — poll again with the ` +
           "same id (error.operationId) rather than resubmitting.",
-        operationId,
+        operationId
       );
     }
     if (interval > 0) {
@@ -803,7 +805,7 @@ export class NexusTradeClient {
           "(base URL is https://nexustrade.io/api/v1). " +
           "Both are also read from a .env file at or above the current " +
           "directory; the real environment takes precedence. " +
-          "OAuth tokens are not accepted by this API.",
+          "OAuth tokens are not accepted by this API."
       );
     }
     this.transport = new HttpTransport({ apiKey, baseUrl });
@@ -815,7 +817,7 @@ export class NexusTradeClient {
 
   async createPortfolio(
     portfolio: PortfolioInput,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     const response = await this.transport.request("POST", "portfolios", {
       body: asJsonObject(portfolio),
@@ -826,7 +828,7 @@ export class NexusTradeClient {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Portfolio response is missing portfolio.",
+        "Portfolio response is missing portfolio."
       );
     }
     return result;
@@ -837,7 +839,7 @@ export class NexusTradeClient {
    * `includePositions` defaults off when `search` is set.
    */
   async listPortfolios(
-    options: ListPortfoliosOptions = {},
+    options: ListPortfoliosOptions = {}
   ): Promise<PortfolioListResult> {
     const query = encodeQuery({
       portfolioIds: options.portfolioIds?.join(","),
@@ -862,8 +864,7 @@ export class NexusTradeClient {
           ? undefined
           : String(options.includePositions),
       search: options.search,
-      limit:
-        options.limit === undefined ? undefined : String(options.limit),
+      limit: options.limit === undefined ? undefined : String(options.limit),
       page: options.page === undefined ? undefined : String(options.page),
     });
     const response = await this.transport.request("GET", `portfolios${query}`);
@@ -872,12 +873,12 @@ export class NexusTradeClient {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Portfolio list response is missing portfolios.",
+        "Portfolio list response is missing portfolios."
       );
     }
     return {
       portfolios: rows.map((row) =>
-        portfolioHandleFromWire(row, { transport: this.transport }),
+        portfolioHandleFromWire(row, { transport: this.transport })
       ),
       page: typeof response.page === "number" ? response.page : 1,
       limit: typeof response.limit === "number" ? response.limit : 20,
@@ -891,14 +892,14 @@ export class NexusTradeClient {
   async getPortfolio(portfolioId: string): Promise<PortfolioHandle> {
     const response = await this.transport.request(
       "GET",
-      `portfolios/${encodePathSegment(portfolioId)}`,
+      `portfolios/${encodePathSegment(portfolioId)}`
     );
     const portfolio = response.portfolio;
     if (!isJsonObject(portfolio)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Portfolio response is missing portfolio.",
+        "Portfolio response is missing portfolio."
       );
     }
     return portfolioHandleFromWire(portfolio, {
@@ -909,21 +910,21 @@ export class NexusTradeClient {
   /** Mint/activate a paper portfolio from a chat draft (or re-activate). */
   async deploy(
     portfolioId: string,
-    options: { frequency?: string } = {},
+    options: { frequency?: string } = {}
   ): Promise<DeployResult> {
     const body: JsonObject = {};
     if (options.frequency !== undefined) body.frequency = options.frequency;
     const response = await this.transport.request(
       "POST",
       `portfolios/${encodePathSegment(portfolioId)}/deploy`,
-      { body },
+      { body }
     );
     const result = response.deployment ?? response;
     if (!isJsonObject(result) || typeof result.portfolioId !== "string") {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Deploy response is missing portfolioId.",
+        "Deploy response is missing portfolioId."
       );
     }
     return {
@@ -945,14 +946,14 @@ export class NexusTradeClient {
     const response = await this.transport.request(
       "POST",
       `portfolios/${encodePathSegment(portfolioId)}/undeploy`,
-      { body: {} },
+      { body: {} }
     );
     const result = response.undeployment ?? response;
     if (!isJsonObject(result)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Undeploy response is missing body.",
+        "Undeploy response is missing body."
       );
     }
     return result;
@@ -986,7 +987,7 @@ export class NexusTradeClient {
    */
   async createCustomIndicator(
     indicator: CustomIndicatorInput,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     const { name, description, scope, points, ...rest } = indicator;
     if (typeof name !== "string" || !name.trim()) {
@@ -996,7 +997,7 @@ export class NexusTradeClient {
     if (unknown.length > 0) {
       throw new Error(
         `Unknown custom indicator field(s): ${unknown.sort().join(", ")}. ` +
-          "Expected name, description, scope, and points.",
+          "Expected name, description, scope, and points."
       );
     }
     const normalized = points ? customIndicatorPoints(points) : [];
@@ -1011,7 +1012,7 @@ export class NexusTradeClient {
       await this.transport.request("POST", "custom-indicators", {
         body,
         idempotencyKey: options.idempotencyKey,
-      }),
+      })
     );
     if (inline || normalized.length === 0) return created;
     const customIndicatorId = String(created.customIndicatorId);
@@ -1021,7 +1022,7 @@ export class NexusTradeClient {
     const upload = await this.uploadCustomIndicatorPoints(
       customIndicatorId,
       normalized,
-      options.idempotencyKey,
+      options.idempotencyKey
     );
     return {
       ...(await this.getCustomIndicator(customIndicatorId)),
@@ -1031,7 +1032,7 @@ export class NexusTradeClient {
 
   /** List the custom data sources this account owns. */
   async listCustomIndicators(
-    options: { includeArchived?: boolean } = {},
+    options: { includeArchived?: boolean } = {}
   ): Promise<JsonObject[]> {
     const query = encodeQuery({
       includeArchived:
@@ -1041,14 +1042,14 @@ export class NexusTradeClient {
     });
     const response = await this.transport.request(
       "GET",
-      `custom-indicators${query}`,
+      `custom-indicators${query}`
     );
     const indicators = response.indicators;
     if (!Array.isArray(indicators)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Custom indicator list response is missing indicators.",
+        "Custom indicator list response is missing indicators."
       );
     }
     return indicators.filter((row): row is JsonObject => isJsonObject(row));
@@ -1059,8 +1060,8 @@ export class NexusTradeClient {
     return customIndicatorOf(
       await this.transport.request(
         "GET",
-        `custom-indicators/${encodePathSegment(customIndicatorId)}`,
-      ),
+        `custom-indicators/${encodePathSegment(customIndicatorId)}`
+      )
     );
   }
 
@@ -1078,7 +1079,7 @@ export class NexusTradeClient {
   async appendCustomIndicatorPoints(
     customIndicatorId: string,
     points: ReadonlyArray<CustomIndicatorPointInput>,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     const normalized = customIndicatorPoints(points);
     if (normalized.length === 0) {
@@ -1088,14 +1089,14 @@ export class NexusTradeClient {
       const response = await this.transport.request(
         "POST",
         `custom-indicators/${encodePathSegment(customIndicatorId)}/points`,
-        { body: { points: normalized }, idempotencyKey: options.idempotencyKey },
+        { body: { points: normalized }, idempotencyKey: options.idempotencyKey }
       );
       const indicator = response.indicator;
       if (!isJsonObject(indicator)) {
         throw new NexusTradeApiError(
           NO_HTTP_STATUS,
           "invalid_response",
-          "Custom indicator response is missing indicator.",
+          "Custom indicator response is missing indicator."
         );
       }
       return indicator;
@@ -1103,12 +1104,80 @@ export class NexusTradeClient {
     const upload = await this.uploadCustomIndicatorPoints(
       customIndicatorId,
       normalized,
-      options.idempotencyKey,
+      options.idempotencyKey
     );
     return {
       ...(await this.getCustomIndicator(customIndicatorId)),
       upload,
     };
+  }
+
+  /** Replace the complete series while retaining the same CustomIndicator id. */
+  async replaceCustomIndicatorPoints(
+    customIndicatorId: string,
+    points: ReadonlyArray<CustomIndicatorPointInput>,
+    options: { idempotencyKey: string; allowShrink?: boolean }
+  ): Promise<JsonObject> {
+    const normalized = customIndicatorPoints(points);
+    if (normalized.length === 0) {
+      throw new Error("replaceCustomIndicatorPoints needs at least one point.");
+    }
+    if (inlinePointBytes(normalized) <= MAX_INLINE_POINT_BYTES) {
+      return customIndicatorOf(
+        await this.transport.request(
+          "PUT",
+          `custom-indicators/${encodePathSegment(customIndicatorId)}/points`,
+          {
+            body: {
+              points: normalized,
+              allowShrink: options.allowShrink === true,
+            },
+            idempotencyKey: options.idempotencyKey,
+          }
+        )
+      );
+    }
+    const upload = await this.uploadCustomIndicatorPoints(
+      customIndicatorId,
+      normalized,
+      options.idempotencyKey,
+      { mode: "replace", allowShrink: options.allowShrink === true }
+    );
+    return {
+      ...(await this.getCustomIndicator(customIndicatorId)),
+      upload,
+    };
+  }
+
+  /** Soft-archive a CustomIndicator. Pass confirm when active portfolios use it. */
+  async archiveCustomIndicator(
+    customIndicatorId: string,
+    options: { confirm?: boolean } = {}
+  ): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "DELETE",
+      `custom-indicators/${encodePathSegment(customIndicatorId)}`,
+      { body: { confirm: options.confirm === true } }
+    );
+    if (!isJsonObject(response.archive)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Custom indicator archive response is missing archive details."
+      );
+    }
+    return response.archive;
+  }
+
+  /** Restore a soft-archived CustomIndicator. */
+  async restoreCustomIndicator(customIndicatorId: string): Promise<JsonObject> {
+    return customIndicatorOf(
+      await this.transport.request(
+        "POST",
+        `custom-indicators/${encodePathSegment(customIndicatorId)}/restore`,
+        { body: {} }
+      )
+    );
   }
 
   /**
@@ -1132,25 +1201,31 @@ export class NexusTradeClient {
       format?: "csv" | "json" | "jsonl";
       contentType?: string;
       sizeBytes?: number;
-    },
+      mode?: "append" | "replace";
+      allowShrink?: boolean;
+    }
   ): Promise<JsonObject> {
     const body: JsonObject = {
       fileName: options.fileName,
       format: options.format ?? "jsonl",
     };
-    if (options.contentType !== undefined) body.contentType = options.contentType;
+    if (options.contentType !== undefined)
+      body.contentType = options.contentType;
     if (options.sizeBytes !== undefined) body.sizeBytes = options.sizeBytes;
+    if (options.mode !== undefined) body.mode = options.mode;
+    if (options.allowShrink !== undefined)
+      body.allowShrink = options.allowShrink;
     const response = await this.transport.request(
       "POST",
       `custom-indicators/${encodePathSegment(customIndicatorId)}/uploads`,
-      { body, idempotencyKey: options.idempotencyKey },
+      { body, idempotencyKey: options.idempotencyKey }
     );
     const ticket = response.ticket;
     if (!isJsonObject(ticket) || !ticket.jobId) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Upload response is missing ticket.",
+        "Upload response is missing ticket."
       );
     }
     return ticket;
@@ -1159,29 +1234,29 @@ export class NexusTradeClient {
   /** Start validation of uploaded bytes and return the operation. */
   async completeCustomIndicatorUpload(
     customIndicatorId: string,
-    jobId: string,
+    jobId: string
   ): Promise<JsonObject> {
     return operationOf(
       await this.transport.request(
         "POST",
         `custom-indicators/${encodePathSegment(customIndicatorId)}` +
           `/uploads/${encodePathSegment(jobId)}/complete`,
-        { body: {} },
-      ),
+        { body: {} }
+      )
     );
   }
 
   /** Read an upload operation. `phase` distinguishes the live states. */
   async getCustomIndicatorUpload(
     customIndicatorId: string,
-    jobId: string,
+    jobId: string
   ): Promise<JsonObject> {
     return operationOf(
       await this.transport.request(
         "GET",
         `custom-indicators/${encodePathSegment(customIndicatorId)}` +
-          `/uploads/${encodePathSegment(jobId)}`,
-      ),
+          `/uploads/${encodePathSegment(jobId)}`
+      )
     );
   }
 
@@ -1189,12 +1264,13 @@ export class NexusTradeClient {
   async waitForCustomIndicatorUpload(
     customIndicatorId: string,
     jobId: string,
-    options: WaitOptions = {},
+    options: WaitOptions = {}
   ): Promise<JsonObject> {
     return waitForOperation(
-      (pendingId) => this.getCustomIndicatorUpload(customIndicatorId, pendingId),
+      (pendingId) =>
+        this.getCustomIndicatorUpload(customIndicatorId, pendingId),
       jobId,
-      options,
+      options
     );
   }
 
@@ -1202,20 +1278,21 @@ export class NexusTradeClient {
     customIndicatorId: string,
     points: ReadonlyArray<JsonObject>,
     idempotencyKey: string,
+    options: { mode?: "append" | "replace"; allowShrink?: boolean } = {}
   ): Promise<JsonObject> {
     const payload = pointsJsonl(points);
     if (payload.length > MAX_UPLOAD_BYTES) {
       throw new Error(
         `${points.length} points serialize to ` +
           `${Math.floor(payload.length / (1024 * 1024))} MB, over the 100 MB ` +
-          "upload limit. Send them in several batches.",
+          "upload limit. Send them in several batches."
       );
     }
     if (!supportsUpload(this.transport)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "unsupported_transport",
-        "Uploading a large point batch requires HttpTransport.putBytes.",
+        "Uploading a large point batch requires HttpTransport.putBytes."
       );
     }
     const ticket = await this.createCustomIndicatorUpload(customIndicatorId, {
@@ -1223,6 +1300,8 @@ export class NexusTradeClient {
       format: "jsonl",
       sizeBytes: payload.length,
       idempotencyKey,
+      mode: options.mode,
+      allowShrink: options.allowShrink,
     });
     const jobId = String(ticket.jobId);
     // No upload URL means this batch already reached the server on an earlier
@@ -1254,7 +1333,7 @@ export class NexusTradeClient {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Brokerage response is missing brokerages.",
+        "Brokerage response is missing brokerages."
       );
     }
     return brokerages.filter((row): row is JsonObject => isJsonObject(row));
@@ -1264,14 +1343,14 @@ export class NexusTradeClient {
   async getBrokerage(brokerage: string): Promise<JsonObject> {
     const response = await this.transport.request(
       "GET",
-      `brokerages/${encodePathSegment(brokerage)}`,
+      `brokerages/${encodePathSegment(brokerage)}`
     );
     const result = response.brokerage;
     if (!isJsonObject(result)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Brokerage response is missing brokerage.",
+        "Brokerage response is missing brokerage."
       );
     }
     return result;
@@ -1295,7 +1374,7 @@ export class NexusTradeClient {
       wait?: boolean;
       timeoutSeconds?: number;
       pollIntervalSeconds?: number;
-    } = {},
+    } = {}
   ): Promise<JsonObject> {
     let current = await this.getBrokerage(brokerage);
     if (current.connected === true) return current;
@@ -1309,7 +1388,7 @@ export class NexusTradeClient {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "brokerage_not_connected",
-        message,
+        message
       );
     }
 
@@ -1326,7 +1405,7 @@ export class NexusTradeClient {
         throw new NexusTradeApiError(
           NO_HTTP_STATUS,
           "brokerage_not_connected",
-          `${brokerage} was still not connected after ${timeoutSeconds}s. ${message}`,
+          `${brokerage} was still not connected after ${timeoutSeconds}s. ${message}`
         );
       }
       await sleep(Math.min(pollSeconds * 1000, remaining));
@@ -1359,7 +1438,7 @@ export class NexusTradeClient {
   async createOrders(
     portfolioId: string,
     orders: ReadonlyArray<JsonObject>,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     if (!Array.isArray(orders) || orders.length === 0) {
       throw new Error("createOrders needs at least one order.");
@@ -1372,7 +1451,7 @@ export class NexusTradeClient {
 
   async createBacktests(
     backtests: ReadonlyArray<JobInput>,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject[]> {
     const inputs = backtests.map((item) => backtestInput(asJsonObject(item)));
     const response = await this.transport.request("POST", "backtests/batch", {
@@ -1387,7 +1466,7 @@ export class NexusTradeClient {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Backtest response is missing operations.",
+        "Backtest response is missing operations."
       );
     }
     return operations as JsonObject[];
@@ -1396,14 +1475,14 @@ export class NexusTradeClient {
   /** Submit one generated `backtest(...)` handle or raw API input. */
   async createBacktest(
     backtest: JobInput,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     const operations = await this.createBacktests([backtest], options);
     if (operations.length !== 1) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Single backtest response returned the wrong operation count.",
+        "Single backtest response returned the wrong operation count."
       );
     }
     return operations[0];
@@ -1417,7 +1496,7 @@ export class NexusTradeClient {
    */
   async createAgent(
     prompt: string,
-    options: { idempotencyKey: string; maxIterations?: number },
+    options: { idempotencyKey: string; maxIterations?: number }
   ): Promise<AgentRun> {
     const body: JsonObject = { prompt };
     if (options.maxIterations !== undefined) {
@@ -1432,13 +1511,13 @@ export class NexusTradeClient {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Agent response is missing agent.",
+        "Agent response is missing agent."
       );
     }
     return new AgentRun(
       String(agent.id),
       this.transport,
-      typeof agent.status === "string" ? agent.status : "initializing",
+      typeof agent.status === "string" ? agent.status : "initializing"
     );
   }
 
@@ -1451,13 +1530,13 @@ export class NexusTradeClient {
    */
   async attachAgent(
     agentId: string,
-    options: { cursor?: string } = {},
+    options: { cursor?: string } = {}
   ): Promise<AgentRun> {
     const agent = await this.getAgent(agentId);
     const run = new AgentRun(
       typeof agent.id === "string" ? agent.id : agentId,
       this.transport,
-      typeof agent.status === "string" ? agent.status : "initializing",
+      typeof agent.status === "string" ? agent.status : "initializing"
     );
     run.terminal = Boolean(agent.terminal);
     run.setCursor(options.cursor ?? null);
@@ -1467,14 +1546,14 @@ export class NexusTradeClient {
   async getAgent(agentId: string): Promise<JsonObject> {
     const response = await this.transport.request(
       "GET",
-      `agents/${encodeURIComponent(agentId)}`,
+      `agents/${encodeURIComponent(agentId)}`
     );
     const agent = response.agent;
     if (!isJsonObject(agent)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Agent response is missing agent.",
+        "Agent response is missing agent."
       );
     }
     return agent;
@@ -1483,52 +1562,52 @@ export class NexusTradeClient {
   async getBacktest(backtestId: string): Promise<JsonObject> {
     const response = await this.transport.request(
       "GET",
-      `backtests/${encodePathSegment(backtestId)}`,
+      `backtests/${encodePathSegment(backtestId)}`
     );
     return operationOf(response);
   }
 
   async createOptimization(
     handle: JobInput,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     return this.createPortfolioJob(
       "optimizations",
       handle,
-      options.idempotencyKey,
+      options.idempotencyKey
     );
   }
 
   async getOptimization(optimizationId: string): Promise<JsonObject> {
     const response = await this.transport.request(
       "GET",
-      `optimizations/${encodePathSegment(optimizationId)}`,
+      `optimizations/${encodePathSegment(optimizationId)}`
     );
     return operationOf(response);
   }
 
   async createWalkForward(
     handle: JobInput,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     return this.createPortfolioJob(
       "walk-forward-studies",
       handle,
-      options.idempotencyKey,
+      options.idempotencyKey
     );
   }
 
   async getWalkForward(studyId: string): Promise<JsonObject> {
     const response = await this.transport.request(
       "GET",
-      `walk-forward-studies/${encodePathSegment(studyId)}`,
+      `walk-forward-studies/${encodePathSegment(studyId)}`
     );
     return operationOf(response);
   }
 
   async createLakeQuery(
     request: JsonObject,
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ): Promise<JsonObject> {
     const response = await this.transport.request("POST", "lake/queries", {
       body: request,
@@ -1541,8 +1620,8 @@ export class NexusTradeClient {
     return operationOf(
       await this.transport.request(
         "GET",
-        `lake/queries/${encodePathSegment(queryId)}`,
-      ),
+        `lake/queries/${encodePathSegment(queryId)}`
+      )
     );
   }
 
@@ -1550,8 +1629,8 @@ export class NexusTradeClient {
     return operationOf(
       await this.transport.request(
         "POST",
-        `lake/queries/${encodePathSegment(queryId)}/cancel`,
-      ),
+        `lake/queries/${encodePathSegment(queryId)}/cancel`
+      )
     );
   }
 
@@ -1559,8 +1638,8 @@ export class NexusTradeClient {
     return operationOf(
       await this.transport.request(
         "GET",
-        `lake/queries/${encodePathSegment(queryId)}/manifest`,
-      ),
+        `lake/queries/${encodePathSegment(queryId)}/manifest`
+      )
     );
   }
 
@@ -1571,7 +1650,7 @@ export class NexusTradeClient {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Lake catalog response is missing tables.",
+        "Lake catalog response is missing tables."
       );
     }
     return tables as JsonObject[];
@@ -1581,14 +1660,14 @@ export class NexusTradeClient {
     const name = table.startsWith("lake.") ? table.slice(5) : table;
     const response = await this.transport.request(
       "GET",
-      `lake/catalog/lake/${encodePathSegment(name)}`,
+      `lake/catalog/lake/${encodePathSegment(name)}`
     );
     const described = response.table;
     if (!isJsonObject(described)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "invalid_response",
-        "Lake describe response is missing table.",
+        "Lake describe response is missing table."
       );
     }
     return described;
@@ -1598,26 +1677,26 @@ export class NexusTradeClient {
   async downloadLakeQueryPart(
     queryId: string,
     part: number,
-    options: { byteRange?: [number, number]; maxBytes?: number } = {},
+    options: { byteRange?: [number, number]; maxBytes?: number } = {}
   ): Promise<Uint8Array> {
     if (!supportsBinary(this.transport)) {
       throw new NexusTradeApiError(
         NO_HTTP_STATUS,
         "unsupported_transport",
-        "Lake part download requires a transport implementing requestBytes.",
+        "Lake part download requires a transport implementing requestBytes."
       );
     }
     return this.transport.requestBytes(
       "GET",
       `lake/queries/${encodePathSegment(queryId)}/parts/${Math.trunc(part)}`,
-      options,
+      options
     );
   }
 
   /** Resolve once a lake query is terminal. See `waitForOperation`. */
   async waitForLakeQuery(
     queryId: string,
-    options: WaitOptions = {},
+    options: WaitOptions = {}
   ): Promise<JsonObject> {
     return waitForOperation((id) => this.getLakeQuery(id), queryId, options);
   }
@@ -1625,7 +1704,7 @@ export class NexusTradeClient {
   /** Resolve once a backtest is terminal. See `waitForOperation`. */
   async waitForBacktest(
     backtestId: string,
-    options: WaitOptions = {},
+    options: WaitOptions = {}
   ): Promise<JsonObject> {
     return waitForOperation((id) => this.getBacktest(id), backtestId, options);
   }
@@ -1633,19 +1712,19 @@ export class NexusTradeClient {
   /** Resolve once an optimization is terminal. See `waitForOperation`. */
   async waitForOptimization(
     optimizationId: string,
-    options: WaitOptions = {},
+    options: WaitOptions = {}
   ): Promise<JsonObject> {
     return waitForOperation(
       (id) => this.getOptimization(id),
       optimizationId,
-      options,
+      options
     );
   }
 
   /** Resolve once a walk-forward study is terminal. See `waitForOperation`. */
   async waitForWalkForward(
     studyId: string,
-    options: WaitOptions = {},
+    options: WaitOptions = {}
   ): Promise<JsonObject> {
     return waitForOperation((id) => this.getWalkForward(id), studyId, options);
   }
@@ -1653,7 +1732,7 @@ export class NexusTradeClient {
   /** Wait on a whole `createBacktests` batch, in submission order. */
   async waitForBacktests(
     operations: ReadonlyArray<JsonObject>,
-    options: WaitOptions = {},
+    options: WaitOptions = {}
   ): Promise<JsonObject[]> {
     const finished: JsonObject[] = [];
     for (const operation of operations) {
@@ -1665,7 +1744,7 @@ export class NexusTradeClient {
   private async createPortfolioJob(
     path: string,
     input: JobInput,
-    idempotencyKey: string,
+    idempotencyKey: string
   ): Promise<JsonObject> {
     const handle = asJsonObject(input);
     const args = handle.args;
@@ -1692,7 +1771,7 @@ function backtestInput(item: JsonObject): JsonObject {
   }
   if (tool !== "backtest_portfolio") {
     throw new Error(
-      "createBacktests accepts backtest(...) handles or raw API inputs.",
+      "createBacktests accepts backtest(...) handles or raw API inputs."
     );
   }
   const portfolio = item.portfolio;
@@ -1716,7 +1795,7 @@ function customIndicatorOf(response: JsonObject): JsonObject {
     throw new NexusTradeApiError(
       NO_HTTP_STATUS,
       "invalid_response",
-      "Custom indicator response is missing indicator.",
+      "Custom indicator response is missing indicator."
     );
   }
   return indicator;
@@ -1728,7 +1807,7 @@ function operationOf(response: JsonObject): JsonObject {
     throw new NexusTradeApiError(
       NO_HTTP_STATUS,
       "invalid_response",
-      "Response is missing operation.",
+      "Response is missing operation."
     );
   }
   return operation;
@@ -1742,7 +1821,7 @@ export function clientTransport(client: NexusTradeClient): Transport {
 /** Convenience wrapper for scripts that do not need a persistent client. */
 export async function createCustomIndicator(
   indicator: CustomIndicatorInput,
-  options: { idempotencyKey: string; client?: NexusTradeClient },
+  options: { idempotencyKey: string; client?: NexusTradeClient }
 ): Promise<JsonObject> {
   const client = options.client ?? NexusTradeClient.fromEnvironment();
   return client.createCustomIndicator(indicator, {
@@ -1753,7 +1832,7 @@ export async function createCustomIndicator(
 /** Convenience wrapper for scripts that do not need a persistent client. */
 export async function createPortfolio(
   portfolio: JsonObject,
-  options: { idempotencyKey: string; client?: NexusTradeClient },
+  options: { idempotencyKey: string; client?: NexusTradeClient }
 ): Promise<JsonObject> {
   const client = options.client ?? NexusTradeClient.fromEnvironment();
   return client.createPortfolio(portfolio, {

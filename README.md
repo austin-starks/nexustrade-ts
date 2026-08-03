@@ -27,7 +27,13 @@ npm install nexustrade
 
 ```ts
 import {
-  NexusTradeClient, always, backtest, buy, portfolio, stockAsset, strategy,
+  NexusTradeClient,
+  always,
+  backtest,
+  buy,
+  portfolio,
+  stockAsset,
+  strategy,
 } from "nexustrade";
 
 const client = new NexusTradeClient({
@@ -41,7 +47,7 @@ const book = portfolio("Example", [
 
 const operation = await client.createBacktest(
   backtest(book, { startDate: "2024-01-01", endDate: "2024-12-31" }),
-  { idempotencyKey: "example-v1" },
+  { idempotencyKey: "example-v1" }
 );
 const result = await client.waitForBacktest(operation.id as string);
 console.log(result.result);
@@ -62,38 +68,42 @@ TypeScript cannot overload comparison operators, so indicators compose through
 ```ts
 import * as nt from "nexustrade";
 
-const book = nt.portfolio("Momentum", [
-  nt.strategy(
-    "Rotate into strength",
-    nt.always(),
-    nt.dynamicRebalance({
-      universe: nt.universe("SP500"),
-      pipeline: [
-        nt.filter(nt.gt(nt.Price(nt.CANDIDATE), nt.SMA(nt.CANDIDATE, 200))),
-        nt.selectTop(nt.RSI(nt.CANDIDATE, 14), 10),
-      ],
-      weightIndicator: nt.RSI(nt.CANDIDATE, 14),
-      limit: 10,
-      deploymentPercent: 80,
-    }),
-  ),
-], { initialValue: 100_000 });
+const book = nt.portfolio(
+  "Momentum",
+  [
+    nt.strategy(
+      "Rotate into strength",
+      nt.always(),
+      nt.dynamicRebalance({
+        universe: nt.universe("SP500"),
+        pipeline: [
+          nt.filter(nt.gt(nt.Price(nt.CANDIDATE), nt.SMA(nt.CANDIDATE, 200))),
+          nt.selectTop(nt.RSI(nt.CANDIDATE, 14), 10),
+        ],
+        weightIndicator: nt.RSI(nt.CANDIDATE, 14),
+        limit: 10,
+        deploymentPercent: 80,
+      })
+    ),
+  ],
+  { initialValue: 100_000 }
+);
 ```
 
 <details>
 <summary><b>What you can build</b> — 170+ generated builders</summary>
 
-| Group | Examples |
-| --- | --- |
-| **Price & volume** | `Price` `OpeningPrice` `HighOfDay` `VWAP` `Volume` `GapPercentage` |
-| **Technicals** | `SMA` `EMA` `RSI` `BollingerBand` `AverageTrueRange` `CrossAbove` |
-| **Position state** | `PositionValue` `PositionPercentChange` `PositionMaxDrawdown` |
-| **Portfolio state** | `PortfolioValue` `BuyingPower` `MaxDrawdown` `InitialValue` |
-| **Fundamentals** | `Fundamental` `Economic` `DaysUntilEarnings` `IsIndexMember` `IsIndustry` |
-| **Options** | `OptionDaysToExpiration` `OptionCollateral` `OptionUnrealizedPnL` `openOption` `closeOption` |
-| **Actions** | `buy` `sell` `alert` `dynamicRebalance` `rebalanceOption` |
-| **Selection** | `filter` `selectTop` `selectPercentile` `universe` |
-| **Logic** | `always` `atLeast` `atMost` `exactly` `fewerThan` `multi` `and` `or` |
+| Group               | Examples                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------- |
+| **Price & volume**  | `Price` `OpeningPrice` `HighOfDay` `VWAP` `Volume` `GapPercentage`                           |
+| **Technicals**      | `SMA` `EMA` `RSI` `BollingerBand` `AverageTrueRange` `CrossAbove`                            |
+| **Position state**  | `PositionValue` `PositionPercentChange` `PositionMaxDrawdown`                                |
+| **Portfolio state** | `PortfolioValue` `BuyingPower` `MaxDrawdown` `InitialValue`                                  |
+| **Fundamentals**    | `Fundamental` `Economic` `DaysUntilEarnings` `IsIndexMember` `IsIndustry`                    |
+| **Options**         | `OptionDaysToExpiration` `OptionCollateral` `OptionUnrealizedPnL` `openOption` `closeOption` |
+| **Actions**         | `buy` `sell` `alert` `dynamicRebalance` `rebalanceOption`                                    |
+| **Selection**       | `filter` `selectTop` `selectPercentile` `universe`                                           |
+| **Logic**           | `always` `atLeast` `atMost` `exactly` `fewerThan` `multi` `and` `or`                         |
 
 Every builder is fully typed — your editor completes the whole surface.
 
@@ -141,12 +151,12 @@ Every job kind reports the same envelope, so one poller serves all of them:
 const finished = await client.waitForBacktest(operation.id as string);
 ```
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `timeoutSeconds` | `900` | Give up waiting (the job keeps running) |
-| `pollIntervalSeconds` | `2` | First interval; backs off 1.5× |
-| `maxPollIntervalSeconds` | `15` | Interval ceiling |
-| `throwOnFailure` | `true` | Throw on `failed`/`cancelled` instead of returning |
+| Option                   | Default | Meaning                                            |
+| ------------------------ | ------- | -------------------------------------------------- |
+| `timeoutSeconds`         | `900`   | Give up waiting (the job keeps running)            |
+| `pollIntervalSeconds`    | `2`     | First interval; backs off 1.5×                     |
+| `maxPollIntervalSeconds` | `15`    | Interval ceiling                                   |
+| `throwOnFailure`         | `true`  | Throw on `failed`/`cancelled` instead of returning |
 
 A timeout throws `operation_timeout` and does **not** cancel the job — call the
 waiter again with the same id rather than resubmitting.
@@ -164,7 +174,7 @@ const study = await client.createWalkForward(
     globalEndDate: "2024-12-31",
     foldCount: 4,
   }),
-  { idempotencyKey: "wf-v1" },
+  { idempotencyKey: "wf-v1" }
 );
 await client.waitForWalkForward(study.id as string);
 ```
@@ -175,24 +185,26 @@ Authoring and backtesting a book does not persist it. `save` writes it to your
 account; `deploy` starts running it.
 
 ```ts
-const book = nt.portfolio("Momentum", [/* … */]);
+const book = nt.portfolio("Momentum", [
+  /* … */
+]);
 
-await book.save({ idempotencyKey: "momentum-v1" });   // persists; sets book.id
-const deployment = await book.deploy();               // starts paper trading
-await book.undeploy();                                // stops it
+await book.save({ idempotencyKey: "momentum-v1" }); // persists; sets book.id
+const deployment = await book.deploy(); // starts paper trading
+await book.undeploy(); // stops it
 ```
 
 **`save` and `deploy` produce different ids, and the distinction matters.**
-`save` persists a *draft* and sets `book.id` to it. `deploy` mints the real
+`save` persists a _draft_ and sets `book.id` to it. `deploy` mints the real
 paper portfolio and returns its own `portfolioId` — deploying creates a
 portfolio rather than converting the draft into one, so the two ids coexist.
 Hold on to `deployment.portfolioId` for anything that reads live state;
 `book.id` addresses the draft.
 
 ```ts
-deployment.portfolioId      // the running portfolio
-deployment.deploymentType   // paper, unless you deployed an existing live one
-deployment.outcome          // created | reactivated
+deployment.portfolioId; // the running portfolio
+deployment.deploymentType; // paper, unless you deployed an existing live one
+deployment.outcome; // created | reactivated
 ```
 
 Handle methods accept an optional `transport`; omitted, they resolve one from
@@ -208,7 +220,7 @@ await client.getPortfolio(portfolioId);
 `includeChatPortfolios`, `search`, `limit`, and `page`. `includePositions`
 defaults off when `search` is set.
 
-**A portfolio you create here is always paper**, and minting a *live* one still
+**A portfolio you create here is always paper**, and minting a _live_ one still
 happens in the web app. Orders and brokerage status are reachable from here;
 see [Live trading](#live-trading).
 
@@ -228,7 +240,7 @@ await client.listBrokerages();
 // [{ brokerage: "Alpaca", connected: false,
 //    connectUrl: "https://nexustrade.io/live-trading" }, ...]
 
-await client.connectBrokerage("Alpaca");   // logs the URL, waits until connected
+await client.connectBrokerage("Alpaca"); // logs the URL, waits until connected
 ```
 
 `connectBrokerage` waits by default **only when stdout is a TTY**. In CI, cron,
@@ -250,17 +262,29 @@ await client.listPortfolios({ includeLive: true, includePaper: false });
 ```ts
 const result = await client.createOrders(
   portfolioId,
-  [{ asset: { name: "SPY", type: "STOCK", symbol: "SPY" },
-     side: "BUY", quantity: 10, orderType: "MARKET" }],
-  { idempotencyKey: "rebalance-2024-04-01" },
+  [
+    {
+      asset: { name: "SPY", type: "STOCK", symbol: "SPY" },
+      side: "BUY",
+      quantity: 10,
+      orderType: "MARKET",
+    },
+  ],
+  { idempotencyKey: "rebalance-2024-04-01" }
 );
 
 // Dollar notional (stock/crypto only — options require contract quantity):
 await client.createOrders(
   portfolioId,
-  [{ asset: { name: "AAPL", type: "STOCK", symbol: "AAPL" },
-     side: "BUY", amount: 500, orderType: "MARKET" }],
-  { idempotencyKey: "buy-aapl-500" },
+  [
+    {
+      asset: { name: "AAPL", type: "STOCK", symbol: "AAPL" },
+      side: "BUY",
+      amount: 500,
+      orderType: "MARKET",
+    },
+  ],
+  { idempotencyKey: "buy-aapl-500" }
 );
 ```
 
@@ -295,12 +319,12 @@ const series = await client.createCustomIndicator(
       { timestamp: "2024-04-02", value: 90, ticker: "NVDA" },
     ],
   },
-  { idempotencyKey: "wsb-mentions-v1" },
+  { idempotencyKey: "wsb-mentions-v1" }
 );
 
 const busy = nt.gt(
   nt.CustomIndicator(nt.stockAsset("NVDA"), String(series.customIndicatorId)),
-  100,
+  100
 );
 const book = nt.portfolio("Attention", [
   nt.strategy("Buy the buzz", busy, nt.buy(nt.stockAsset("NVDA"), 25)),
@@ -322,7 +346,7 @@ success.
 await client.appendCustomIndicatorPoints(
   String(series.customIndicatorId),
   [{ timestamp: "2024-04-03", value: 118, ticker: "NVDA" }],
-  { idempotencyKey: "wsb-mentions-2024-04-03" },
+  { idempotencyKey: "wsb-mentions-2024-04-03" }
 );
 ```
 
@@ -330,11 +354,11 @@ Creating a fresh series per run splits the history into fragments no strategy
 can read. Re-sending an identical batch is safe — the duplicate is not written
 twice.
 
-| Call | Purpose |
-| --- | --- |
-| `createCustomIndicator(spec, { idempotencyKey })` | Create, optionally seeded |
-| `appendCustomIndicatorPoints(id, points, { idempotencyKey })` | Add points |
-| `listCustomIndicators()` / `getCustomIndicator(id)` | Discover ids and coverage |
+| Call                                                          | Purpose                   |
+| ------------------------------------------------------------- | ------------------------- |
+| `createCustomIndicator(spec, { idempotencyKey })`             | Create, optionally seeded |
+| `appendCustomIndicatorPoints(id, points, { idempotencyKey })` | Add points                |
+| `listCustomIndicators()` / `getCustomIndicator(id)`           | Discover ids and coverage |
 
 Points accept `timestamp`, `value`, `ticker`, `assetType`, and `availableAt`
 — camelCase or snake_case, with `Date` objects allowed. Set `availableAt` when a
@@ -412,11 +436,12 @@ flowchart LR
 ```ts
 const query = await client.createLakeQuery(
   {
-    query: "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
+    query:
+      "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
     params: ["AAPL"],
     limits: { maxRows: 10_000 },
   },
-  { idempotencyKey: "aapl-daily-v1" },
+  { idempotencyKey: "aapl-daily-v1" }
 );
 const finished = await client.waitForLakeQuery(query.id as string);
 const manifest = await client.getLakeQueryManifest(finished.id as string);
@@ -436,94 +461,97 @@ is missing here, so this list cannot drift from the code.
 
 **Live trading and orders**
 
-| Method | Purpose |
-| --- | --- |
-| `listBrokerages()` | Every connectable brokerage and whether it is linked |
-| `getBrokerage(brokerage)` | Whether one brokerage is linked |
-| `connectBrokerage(brokerage, { wait })` | Log the connect URL and wait for the link |
-| `createOrders(portfolioId, orders, { idempotencyKey })` | Stage orders; live ones need approval |
+| Method                                                  | Purpose                                              |
+| ------------------------------------------------------- | ---------------------------------------------------- |
+| `listBrokerages()`                                      | Every connectable brokerage and whether it is linked |
+| `getBrokerage(brokerage)`                               | Whether one brokerage is linked                      |
+| `connectBrokerage(brokerage, { wait })`                 | Log the connect URL and wait for the link            |
+| `createOrders(portfolioId, orders, { idempotencyKey })` | Stage orders; live ones need approval                |
 
 **Portfolios**
 
-| Method | Purpose |
-| --- | --- |
-| `createPortfolio(book, { idempotencyKey })` | Persist a portfolio definition |
-| `listPortfolios(options)` | List portfolios, with filters and pagination |
-| `getPortfolio(portfolioId)` | Read one portfolio |
-| `deploy(portfolioId, { frequency })` | Start paper trading it |
-| `undeploy(portfolioId)` | Stop it |
+| Method                                      | Purpose                                      |
+| ------------------------------------------- | -------------------------------------------- |
+| `createPortfolio(book, { idempotencyKey })` | Persist a portfolio definition               |
+| `listPortfolios(options)`                   | List portfolios, with filters and pagination |
+| `getPortfolio(portfolioId)`                 | Read one portfolio                           |
+| `deploy(portfolioId, { frequency })`        | Start paper trading it                       |
+| `undeploy(portfolioId)`                     | Stop it                                      |
 
 **Backtests**
 
-| Method | Purpose |
-| --- | --- |
-| `createBacktest(handle, { idempotencyKey })` | Submit one backtest |
+| Method                                         | Purpose                    |
+| ---------------------------------------------- | -------------------------- |
+| `createBacktest(handle, { idempotencyKey })`   | Submit one backtest        |
 | `createBacktests(handles, { idempotencyKey })` | Submit many in one request |
-| `getBacktest(backtestId)` | Read the operation |
-| `waitForBacktest(backtestId, options)` | Block until terminal |
-| `waitForBacktests(operations, options)` | Block on a whole batch |
+| `getBacktest(backtestId)`                      | Read the operation         |
+| `waitForBacktest(backtestId, options)`         | Block until terminal       |
+| `waitForBacktests(operations, options)`        | Block on a whole batch     |
 
 **Optimization and walk-forward**
 
-| Method | Purpose |
-| --- | --- |
-| `createOptimization(handle, { idempotencyKey })` | Submit an optimization |
-| `getOptimization(optimizationId)` | Read the operation |
-| `waitForOptimization(optimizationId, options)` | Block until terminal |
-| `createWalkForward(handle, { idempotencyKey })` | Submit a walk-forward study |
-| `getWalkForward(studyId)` | Read the operation |
-| `waitForWalkForward(studyId, options)` | Block until terminal |
+| Method                                           | Purpose                     |
+| ------------------------------------------------ | --------------------------- |
+| `createOptimization(handle, { idempotencyKey })` | Submit an optimization      |
+| `getOptimization(optimizationId)`                | Read the operation          |
+| `waitForOptimization(optimizationId, options)`   | Block until terminal        |
+| `createWalkForward(handle, { idempotencyKey })`  | Submit a walk-forward study |
+| `getWalkForward(studyId)`                        | Read the operation          |
+| `waitForWalkForward(studyId, options)`           | Block until terminal        |
 
 **Custom data sources**
 
-| Method | Purpose |
-| --- | --- |
-| `createCustomIndicator(spec, { idempotencyKey })` | Create a series, optionally seeded |
-| `listCustomIndicators(options)` | List owned series |
-| `getCustomIndicator(id)` | Read one, with its point count and range |
-| `appendCustomIndicatorPoints(id, points, { idempotencyKey })` | Add points |
-| `createCustomIndicatorUpload(id, options)` | Open an upload slot (CSV/JSON/JSONL) |
-| `completeCustomIndicatorUpload(id, jobId)` | Start validating uploaded bytes |
-| `getCustomIndicatorUpload(id, jobId)` | Read the upload operation |
-| `waitForCustomIndicatorUpload(id, jobId, options)` | Block until validated |
+| Method                                                                      | Purpose                                            |
+| --------------------------------------------------------------------------- | -------------------------------------------------- |
+| `createCustomIndicator(spec, { idempotencyKey })`                           | Create a series, optionally seeded                 |
+| `listCustomIndicators(options)`                                             | List owned series                                  |
+| `getCustomIndicator(id)`                                                    | Read one, with its point count and range           |
+| `appendCustomIndicatorPoints(id, points, { idempotencyKey })`               | Add points                                         |
+| `replaceCustomIndicatorPoints(id, points, { idempotencyKey, allowShrink })` | Replace the complete series while retaining its id |
+| `archiveCustomIndicator(id, { confirm })`                                   | Soft-archive a series                              |
+| `restoreCustomIndicator(id)`                                                | Restore an archived series                         |
+| `createCustomIndicatorUpload(id, options)`                                  | Open an upload slot (CSV/JSON/JSONL)               |
+| `completeCustomIndicatorUpload(id, jobId)`                                  | Start validating uploaded bytes                    |
+| `getCustomIndicatorUpload(id, jobId)`                                       | Read the upload operation                          |
+| `waitForCustomIndicatorUpload(id, jobId, options)`                          | Block until validated                              |
 
 **Agent runs**
 
-| Method | Purpose |
-| --- | --- |
-| `createAgent(prompt, { idempotencyKey })` | Start a run |
-| `getAgent(agentId)` | Read its status |
-| `attachAgent(agentId, { cursor })` | Reattach to a run already in flight |
+| Method                                    | Purpose                             |
+| ----------------------------------------- | ----------------------------------- |
+| `createAgent(prompt, { idempotencyKey })` | Start a run                         |
+| `getAgent(agentId)`                       | Read its status                     |
+| `attachAgent(agentId, { cursor })`        | Reattach to a run already in flight |
 
 **Lake SQL**
 
-| Method | Purpose |
-| --- | --- |
-| `createLakeQuery(request, { idempotencyKey })` | Submit read-only SQL |
-| `getLakeQuery(queryId)` | Read the operation |
-| `waitForLakeQuery(queryId, options)` | Block until terminal |
-| `cancelLakeQuery(queryId)` | Cancel an owned query |
-| `getLakeQueryManifest(queryId)` | Schema, checksums, and part metadata |
-| `downloadLakeQueryPart(queryId, part, options)` | Download one Parquet part |
-| `getLakeCatalog()` | List queryable tables |
-| `describeLakeTable(table)` | Columns and types for one table |
+| Method                                          | Purpose                              |
+| ----------------------------------------------- | ------------------------------------ |
+| `createLakeQuery(request, { idempotencyKey })`  | Submit read-only SQL                 |
+| `getLakeQuery(queryId)`                         | Read the operation                   |
+| `waitForLakeQuery(queryId, options)`            | Block until terminal                 |
+| `cancelLakeQuery(queryId)`                      | Cancel an owned query                |
+| `getLakeQueryManifest(queryId)`                 | Schema, checksums, and part metadata |
+| `downloadLakeQueryPart(queryId, part, options)` | Download one Parquet part            |
+| `getLakeCatalog()`                              | List queryable tables                |
+| `describeLakeTable(table)`                      | Columns and types for one table      |
 
 **Client construction**
 
-| Method | Purpose |
-| --- | --- |
-| `new NexusTradeClient({ apiKey, baseUrl })` | Explicit credentials |
-| `NexusTradeClient.fromEnvironment()` | Read them from the environment or `.env` |
+| Method                                      | Purpose                                  |
+| ------------------------------------------- | ---------------------------------------- |
+| `new NexusTradeClient({ apiKey, baseUrl })` | Explicit credentials                     |
+| `NexusTradeClient.fromEnvironment()`        | Read them from the environment or `.env` |
 
 **PortfolioHandle** — returned by the `portfolio(...)` builder and by
 `getPortfolio` / `listPortfolios`.
 
-| Method | Purpose |
-| --- | --- |
-| `save({ idempotencyKey })` | Persist it as a draft, setting `.id` |
-| `backtest({ startDate, endDate, idempotencyKey })` | Backtest it, preferring the saved id |
-| `deploy({ frequency })` | Mint the real paper portfolio (new id) |
-| `undeploy()` | Deactivate its deployment |
+| Method                                             | Purpose                                |
+| -------------------------------------------------- | -------------------------------------- |
+| `save({ idempotencyKey })`                         | Persist it as a draft, setting `.id`   |
+| `backtest({ startDate, endDate, idempotencyKey })` | Backtest it, preferring the saved id   |
+| `deploy({ frequency })`                            | Mint the real paper portfolio (new id) |
+| `undeploy()`                                       | Deactivate its deployment              |
 
 ## Authentication
 
@@ -553,11 +581,11 @@ The real environment always wins — a `.env` value is used only when the variab
 is absent, so a stale file can never override what you exported. Nothing is
 written back to `process.env`. Opt out with `NEXUSTRADE_DISABLE_DOTENV=1`.
 
-| Scope | Grants |
-| --- | --- |
-| `read` | `getBacktest`, `getOptimization`, `getWalkForward` |
+| Scope   | Grants                                                                            |
+| ------- | --------------------------------------------------------------------------------- |
+| `read`  | `getBacktest`, `getOptimization`, `getWalkForward`                                |
 | `write` | `createPortfolio`, `createBacktest(s)`, `createOptimization`, `createWalkForward` |
-| `lake` | Lake catalog, query lifecycle, manifests, result parts |
+| `lake`  | Lake catalog, query lifecycle, manifests, result parts                            |
 
 A key missing the scope gets `403 insufficient_scope`.
 
@@ -589,23 +617,26 @@ import { NexusTradeApiError } from "nexustrade";
 try {
   await client.createBacktest(handle, { idempotencyKey: "run-1" });
 } catch (error) {
-  if (error instanceof NexusTradeApiError && error.code === "rate_limit_exceeded") {
+  if (
+    error instanceof NexusTradeApiError &&
+    error.code === "rate_limit_exceeded"
+  ) {
     // back off
   }
   throw error;
 }
 ```
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| 401 | `invalid_token` | Missing, malformed, or expired key (or an OAuth JWT) |
-| 403 | `insufficient_scope` | Key lacks `read`, `write`, or `lake` |
-| 400 | `invalid_request`, `invalid_portfolio` | Malformed input |
-| 400 | `invalid_idempotency_key` | Must match `[A-Za-z0-9._:-]{1,160}` |
-| 409 | `idempotency_conflict` | Key reused with a different payload |
-| 409 | `idempotency_in_progress` | Same key, first call still running. Re-poll, do not resubmit |
-| 404 | `not_found`, `operation_not_found` | Unknown or not yours |
-| 429 | `rate_limit_exceeded` | Back off and retry |
+| Status | Code                                   | Meaning                                                      |
+| ------ | -------------------------------------- | ------------------------------------------------------------ |
+| 401    | `invalid_token`                        | Missing, malformed, or expired key (or an OAuth JWT)         |
+| 403    | `insufficient_scope`                   | Key lacks `read`, `write`, or `lake`                         |
+| 400    | `invalid_request`, `invalid_portfolio` | Malformed input                                              |
+| 400    | `invalid_idempotency_key`              | Must match `[A-Za-z0-9._:-]{1,160}`                          |
+| 409    | `idempotency_conflict`                 | Key reused with a different payload                          |
+| 409    | `idempotency_in_progress`              | Same key, first call still running. Re-poll, do not resubmit |
+| 404    | `not_found`, `operation_not_found`     | Unknown or not yours                                         |
+| 429    | `rate_limit_exceeded`                  | Back off and retry                                           |
 
 `status` is `0` when no HTTP status describes the failure: `transport_error`
 (never reached the API), `unsafe_redirect`, or an `invalid_response` envelope
@@ -615,7 +646,7 @@ check on an otherwise-successful reply.
 
 `new HttpTransport({ timeoutSeconds })` (default 30) is a total wall-clock
 deadline for one request. Neither it nor the poll timeout bounds how long a
-*job* takes.
+_job_ takes.
 
 ## Scope
 

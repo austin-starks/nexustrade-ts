@@ -28,7 +28,7 @@ class FakeTransport implements Transport {
   async request(
     method: string,
     path: string,
-    options: RequestOptions = {},
+    options: RequestOptions = {}
   ): Promise<JsonObject> {
     this.calls.push({
       method,
@@ -51,7 +51,7 @@ describe("NexusTradeClient", () => {
 
     const result = await client.createPortfolio(
       { name: "Book", strategies: [{ name: "s" }] },
-      { idempotencyKey: "book-v1" },
+      { idempotencyKey: "book-v1" }
     );
 
     assert.equal(result.portfolioId, "p-1");
@@ -79,7 +79,7 @@ describe("NexusTradeClient", () => {
           endDate: "2024-12-31",
         },
       ],
-      { idempotencyKey: "bt-v1" },
+      { idempotencyKey: "bt-v1" }
     );
 
     assert.equal(operations[0].id, "bt-1");
@@ -103,7 +103,7 @@ describe("NexusTradeClient", () => {
           initial_value: 25_000,
         },
       },
-      { idempotencyKey: "bt-generated-v1" },
+      { idempotencyKey: "bt-generated-v1" }
     );
 
     assert.equal(operation.id, "bt-1");
@@ -127,9 +127,9 @@ describe("NexusTradeClient", () => {
       () =>
         client.createBacktests(
           [{ tool: "optimize_portfolio", portfolio: {}, args: {} }],
-          { idempotencyKey: "wrong-handle" },
+          { idempotencyKey: "wrong-handle" }
         ),
-      /backtest/,
+      /backtest/
     );
   });
 
@@ -145,7 +145,7 @@ describe("NexusTradeClient", () => {
         portfolio: { name: "Book" },
         args: { start_date: "2022-01-01" },
       },
-      { idempotencyKey: "opt-v1" },
+      { idempotencyKey: "opt-v1" }
     );
 
     assert.equal(operation.id, "opt-1");
@@ -176,7 +176,7 @@ describe("NexusTradeClient", () => {
         portfolio: { name: "Book" },
         args: { global_start_date: "2022-01-01" },
       },
-      { idempotencyKey: "wf-v1" },
+      { idempotencyKey: "wf-v1" }
     );
     const completed = await client.getWalkForward("wf-1");
     const backtest = await client.getBacktest("bt-1");
@@ -186,7 +186,7 @@ describe("NexusTradeClient", () => {
     assert.equal(backtest.id, "bt-1");
     assert.deepEqual(
       transport.calls.map((call) => call.path),
-      ["walk-forward-studies", "walk-forward-studies/wf-1", "backtests/bt-1"],
+      ["walk-forward-studies", "walk-forward-studies/wf-1", "backtests/bt-1"]
     );
   });
 
@@ -201,7 +201,7 @@ describe("NexusTradeClient", () => {
         assert.ok(error instanceof NexusTradeApiError);
         assert.equal(error.code, "invalid_response");
         return true;
-      },
+      }
     );
   });
 
@@ -252,7 +252,7 @@ describe("operation waiter", () => {
         assert.equal(error.code, "operation_timeout");
         assert.match(error.message, /still running/);
         return true;
-      },
+      }
     );
     assert.ok(transport.callCount > 0);
   });
@@ -309,7 +309,7 @@ describe("operation waiter", () => {
         assert.ok(error instanceof NexusTradeApiError);
         assert.equal(error.code, "transport_error");
         return true;
-      },
+      }
     );
   });
 
@@ -317,7 +317,7 @@ describe("operation waiter", () => {
     const client = new NexusTradeClient({ transport: new FakeTransport([]) });
     await assert.rejects(
       () => client.waitForBacktest("bt-1", { timeoutSeconds: 0 }),
-      /timeoutSeconds must be positive/,
+      /timeoutSeconds must be positive/
     );
   });
 });
@@ -332,13 +332,15 @@ class UploadingTransport extends FakeTransport {
   async putBytes(
     url: string,
     data: Uint8Array<ArrayBuffer>,
-    options: { contentType: string },
+    options: { contentType: string }
   ): Promise<void> {
     this.uploads.push({ url, data, contentType: options.contentType });
   }
 }
 
-function bigPoints(count: number): { timestamp: string; value: number; ticker: string }[] {
+function bigPoints(
+  count: number
+): { timestamp: string; value: number; ticker: string }[] {
   return Array.from({ length: count }, (_, index) => ({
     timestamp: `2024-04-${String((index % 28) + 1).padStart(2, "0")}`,
     value: index,
@@ -372,7 +374,7 @@ describe("custom indicators", () => {
 
     const result = await client.createCustomIndicator(
       { name: "Big", scope: "asset", points },
-      { idempotencyKey: "big-v1" },
+      { idempotencyKey: "big-v1" }
     );
 
     // The create request carries no points; they went to storage directly.
@@ -385,12 +387,12 @@ describe("custom indicators", () => {
         "custom-indicators/ci-1/uploads/job-1/complete",
         "custom-indicators/ci-1/uploads/job-1",
         "custom-indicators/ci-1",
-      ],
+      ]
     );
     assert.equal(transport.calls[1].body?.format, "jsonl");
     assert.equal(
       transport.calls[1].body?.sizeBytes,
-      transport.uploads[0].data.length,
+      transport.uploads[0].data.length
     );
     // The server namespaces claims by operation, so reusing the key is safe
     // and cannot overrun its length limit.
@@ -400,7 +402,7 @@ describe("custom indicators", () => {
     assert.equal(
       new TextDecoder().decode(transport.uploads[0].data).trimEnd().split("\n")
         .length,
-      points.length,
+      points.length
     );
     assert.equal(result.pointCount, points.length);
     assert.deepEqual(result.upload, {
@@ -433,7 +435,7 @@ describe("custom indicators", () => {
 
     const result = await client.createCustomIndicator(
       { name: "Big", scope: "asset", points },
-      { idempotencyKey: "big-v1" },
+      { idempotencyKey: "big-v1" }
     );
 
     assert.deepEqual(transport.uploads, []);
@@ -445,7 +447,7 @@ describe("custom indicators", () => {
         // No /complete — the first attempt already started validation.
         "custom-indicators/ci-1/uploads/job-1",
         "custom-indicators/ci-1",
-      ],
+      ]
     );
     assert.equal(result.pointCount, points.length);
   });
@@ -478,13 +480,13 @@ describe("custom indicators", () => {
       () =>
         client.createCustomIndicator(
           { name: "Big", scope: "asset", points: bigPoints(20_000) },
-          { idempotencyKey: "big-v1" },
+          { idempotencyKey: "big-v1" }
         ),
       (error: unknown) => {
         assert.ok(error instanceof NexusTradeApiError);
         assert.equal(error.code, "custom_indicator_upload_failed");
         return true;
-      },
+      }
     );
   });
 
@@ -498,13 +500,13 @@ describe("custom indicators", () => {
       () =>
         client.createCustomIndicator(
           { name: "Big", points: bigPoints(20_000) },
-          { idempotencyKey: "big-v1" },
+          { idempotencyKey: "big-v1" }
         ),
       (error: unknown) => {
         assert.ok(error instanceof NexusTradeApiError);
         assert.equal(error.code, "unsupported_transport");
         return true;
-      },
+      }
     );
   });
 
@@ -519,7 +521,7 @@ describe("custom indicators", () => {
         name: "Dated",
         points: [{ timestamp: new Date("2024-04-01T00:00:00.000Z"), value: 3 }],
       },
-      { idempotencyKey: "dated-v1" },
+      { idempotencyKey: "dated-v1" }
     );
 
     assert.deepEqual(transport.calls[0].body?.points, [
@@ -539,8 +541,79 @@ describe("custom indicators", () => {
 
     assert.equal(
       transport.calls[0].path,
-      "custom-indicators?includeArchived=true",
+      "custom-indicators?includeArchived=true"
     );
     assert.deepEqual(indicators, [{ customIndicatorId: "ci-1" }]);
+  });
+
+  it("replaces, archives, and restores through the public lifecycle", async () => {
+    const transport = new FakeTransport([
+      { indicator: { customIndicatorId: "ci-1", dataVersion: 2 } },
+      { archive: { customIndicatorId: "ci-1", forksPaused: 0 } },
+      { indicator: { customIndicatorId: "ci-1", status: "active" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.replaceCustomIndicatorPoints(
+      "ci-1",
+      [{ timestamp: "2024-04-01", value: 3 }],
+      { idempotencyKey: "replace-v2", allowShrink: true }
+    );
+    await client.archiveCustomIndicator("ci-1", { confirm: true });
+    await client.restoreCustomIndicator("ci-1");
+
+    assert.deepEqual(transport.calls, [
+      {
+        method: "PUT",
+        path: "custom-indicators/ci-1/points",
+        body: {
+          points: [{ timestamp: "2024-04-01", value: 3 }],
+          allowShrink: true,
+        },
+        idempotencyKey: "replace-v2",
+      },
+      {
+        method: "DELETE",
+        path: "custom-indicators/ci-1",
+        body: { confirm: true },
+        idempotencyKey: undefined,
+      },
+      {
+        method: "POST",
+        path: "custom-indicators/ci-1/restore",
+        body: {},
+        idempotencyKey: undefined,
+      },
+    ]);
+  });
+
+  it("uses replace upload mode for a large full-series replacement", async () => {
+    const points = bigPoints(20_000);
+    const transport = new UploadingTransport([
+      {
+        ticket: {
+          jobId: "job-replace",
+          uploadUrl: "https://storage.example/replace",
+          headers: { "Content-Type": "application/x-ndjson" },
+        },
+      },
+      { operation: { id: "job-replace", status: "queued" } },
+      { operation: { id: "job-replace", status: "completed" } },
+      { indicator: { customIndicatorId: "ci-1", pointCount: points.length } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.replaceCustomIndicatorPoints("ci-1", points, {
+      idempotencyKey: "replace-large-v1",
+      allowShrink: true,
+    });
+
+    assert.deepEqual(transport.calls[0].body, {
+      fileName: "ci-1-points.jsonl",
+      format: "jsonl",
+      sizeBytes: transport.uploads[0].data.length,
+      mode: "replace",
+      allowShrink: true,
+    });
   });
 });
