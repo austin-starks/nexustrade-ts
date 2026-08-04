@@ -986,7 +986,7 @@ export function HighOfDay(asset: AssetArg): Indicator {
  * Index indicator.
  * @param metric Ticker key matching hydrated index price data (add more in BigQuery + rehydrate as needed)
  */
-export function Index(metric: "VIX" | "SPX" | "NDX" | "DJI" | "RUT" | "SKEW" | "VVIX" | "DXY" | "TNX" = "VIX"): Indicator {
+export function Index(metric: "VIX" | "SPX" | "NDX" | "DJI" | "RUT" | "SKEW" | "VVIX" | "USDBROAD" | "TNX" = "VIX"): Indicator {
   const d: Record<string, unknown> = { type: "Index" };
   d["metric"] = metric;
   return d as unknown as Indicator;
