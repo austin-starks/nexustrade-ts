@@ -1836,6 +1836,58 @@ export class NexusTradeClient {
     );
   }
 
+  /**
+   * Submit a natural-language stock screen. Returns immediately; poll it.
+   *
+   * `returnQuery` keeps the generated SQL, engine and catalog version on the
+   * result. It defaults on: the SQL is the audit trail, and without it the rows
+   * are a number nobody can re-derive. It is returned on failure regardless,
+   * because a rejected query is the most useful thing to read.
+   */
+  async createNlScreen(
+    question: string,
+    options: { returnQuery?: boolean } = {}
+  ): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request("POST", "nl/screens", {
+        body: {
+          question,
+          returnQuery: options.returnQuery ?? true,
+        },
+      })
+    );
+  }
+
+  async getNlScreen(screenId: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "GET",
+        `nl/screens/${encodePathSegment(screenId)}`
+      )
+    );
+  }
+
+  async cancelNlScreen(screenId: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "POST",
+        `nl/screens/${encodePathSegment(screenId)}/cancel`
+      )
+    );
+  }
+
+  /** Block until a screen is terminal. See `waitForOperation`. */
+  async waitForNlScreen(
+    screenId: string,
+    options: WaitOptions = {}
+  ): Promise<JsonObject> {
+    return waitForOperation(
+      (id) => this.getNlScreen(id),
+      screenId,
+      options
+    );
+  }
+
   async getLakeQueryManifest(queryId: string): Promise<JsonObject> {
     return operationOf(
       await this.transport.request(

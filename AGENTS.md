@@ -312,7 +312,17 @@ you did not create in this session as possibly live.
 
 Not in this SDK. Do not attempt to reach them through it:
 
-- **Screener** — MCP only.
+- ~~**Screener** — MCP only.~~ **The screener is here now:**
+  `client.createNlScreen("...")` + `waitForNlScreen(id)` turns a plain-language
+  question into validated `lake.*` SQL, runs it, and returns the rows *and the
+  statement*. Prefer it over hand-writing SQL for stock selection — the server
+  picks tables from the same catalog the validator enforces, so it cannot name
+  a column that does not exist. Fall back to `createLakeQuery` only when
+  `outcome === "GENERATION_FAILED"`, or when the question is not a stock
+  screen. `EMPTY` is an answer, not a fallback trigger, and `CLARIFICATION`
+  means the question was ambiguous — answer it rather than guessing SQL. Always
+  report `result.sql`: it is model-generated, so it is the only way anyone can
+  check the numbers. Spends LLM credits; the lake API does not.
 - **Submitting a live order** — impossible from anywhere, not just here. Live
   orders are staged `PENDING_USER_APPROVAL` and a human approves them in the
   UI; the brokerage boundary refuses an unapproved live order regardless of

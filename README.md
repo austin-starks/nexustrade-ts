@@ -457,6 +457,38 @@ const finished = await client.waitForLakeQuery(query.id as string);
 const manifest = await client.getLakeQueryManifest(finished.id as string);
 ```
 
+## Natural language
+
+Describe the screen instead of writing the SQL. The server generates it,
+validates it against the same `lake.*` catalog the engine reads, executes it,
+and hands back both the rows and the statement.
+
+```ts
+const screen = await client.createNlScreen(
+  "technology stocks with a market cap over 100 billion and a PE under 30"
+);
+const done = await client.waitForNlScreen(screen.id as string);
+
+const result = done.result as Record<string, unknown>;
+console.log(result.rows);
+console.log(result.sql); // always check the SQL — it is model-generated
+```
+
+`returnQuery` defaults to `true` because the SQL is the audit trail: without it
+the rows are a number you cannot re-derive. It is returned on failure whatever
+you pass, since a rejected query is the most useful thing to read.
+
+Branch on `result.outcome`, not on status alone:
+
+| `outcome`           | Meaning                                                   |
+| ------------------- | --------------------------------------------------------- |
+| `ROWS`              | Matches found                                              |
+| `EMPTY`             | Every filter ran and nothing cleared them all — an answer  |
+| `CLARIFICATION`     | The question was ambiguous; `result.clarification` asks    |
+| `GENERATION_FAILED` | The retry budget was spent — the only case worth retrying  |
+
+This method spends LLM credits. The structured `lake` API below does not.
+
 Use the manifest plus `downloadLakeQueryPart` to stream results within your own
 memory budget. NexusTrade picks a compatible backing engine for the referenced
 tables; your SQL does not change when it does.
@@ -545,6 +577,15 @@ is missing here, so this list cannot drift from the code.
 | `downloadLakeQueryPart(queryId, part, options)` | Download one Parquet part            |
 | `getLakeCatalog()`                              | List queryable tables                |
 | `describeLakeTable(table)`                      | Columns and types for one table      |
+
+**Natural language**
+
+| Method                                      | Purpose                                     |
+| ------------------------------------------- | ------------------------------------------- |
+| `createNlScreen(question, { returnQuery })` | Screen stocks from a plain-language question |
+| `getNlScreen(screenId)`                     | Read the operation                          |
+| `waitForNlScreen(screenId, options)`        | Block until terminal                        |
+| `cancelNlScreen(screenId)`                  | Cancel an owned screen                      |
 
 **Client construction**
 

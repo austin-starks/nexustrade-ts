@@ -56,6 +56,11 @@ const NO_BODY_METHODS = new Set([
   "get_custom_indicator",
   "get_optimization",
   "get_walk_forward",
+  // NL screens carry no idempotency key: submit is cheap to repeat and the job
+  // id is the dedupe handle, so a retry costs a poll rather than a run.
+  "create_nl_screen",
+  "get_nl_screen",
+  "cancel_nl_screen",
 ]);
 // Methods that take no positional argument at all; the fixture's `input` is null.
 const NO_ARG_METHODS = new Set(["list_brokerages"]);
