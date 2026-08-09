@@ -983,6 +983,17 @@ export function HighOfDay(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * ImpliedVolatility indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param dte Target constant-maturity tenor in calendar days (e.g. 30)
+ */
+export function ImpliedVolatility(asset: AssetArg, dte: number = 30): Indicator {
+  const d: Record<string, unknown> = { type: "ImpliedVolatility" };
+  setAsset(d, "targetAsset", asset);
+  d["dte"] = dte;
+  return d as unknown as Indicator;
+}
+/**
  * Index indicator.
  * @param metric Ticker key matching hydrated index price data (add more in BigQuery + rehydrate as needed)
  */
@@ -1127,6 +1138,41 @@ export function IsNotAsset(matchAsset: AssetArg, asset: AssetArg): Indicator {
   const d: Record<string, unknown> = { type: "IsNotAsset" };
   setAsset(d, "matchAsset", matchAsset);
   setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * IVHVRatio indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param hvWindow Trading days of log-return history for realized volatility
+ */
+export function IVHVRatio(asset: AssetArg, hvWindow: number = 20): Indicator {
+  const d: Record<string, unknown> = { type: "IVHVRatio" };
+  setAsset(d, "targetAsset", asset);
+  d["hvWindow"] = hvWindow;
+  return d as unknown as Indicator;
+}
+/**
+ * IVPercentile indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function IVPercentile(asset: AssetArg, length: number = 252, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "IVPercentile" };
+  setAsset(d, "targetAsset", asset);
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
+ * IVRank indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function IVRank(asset: AssetArg, length: number = 252, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "IVRank" };
+  setAsset(d, "targetAsset", asset);
+  d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
 /**
