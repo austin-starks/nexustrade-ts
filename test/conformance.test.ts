@@ -61,6 +61,9 @@ const NO_BODY_METHODS = new Set([
   "create_nl_screen",
   "get_nl_screen",
   "cancel_nl_screen",
+  "create_lake_ask",
+  "get_lake_ask",
+  "cancel_lake_ask",
 ]);
 // Methods that take no positional argument at all; the fixture's `input` is null.
 const NO_ARG_METHODS = new Set(["list_brokerages"]);

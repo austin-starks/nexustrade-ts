@@ -573,6 +573,10 @@ is missing here, so this list cannot drift from the code.
 | `getLakeQuery(queryId)`                         | Read the operation                   |
 | `waitForLakeQuery(queryId, options)`            | Block until terminal                 |
 | `cancelLakeQuery(queryId)`                      | Cancel an owned query                |
+| `createLakeAsk(question)`                       | Ask the lake in plain language       |
+| `getLakeAsk(askId)`                             | Read the operation                   |
+| `waitForLakeAsk(askId, options)`                | Block until terminal                 |
+| `cancelLakeAsk(askId)`                          | Cancel an owned ask                  |
 | `getLakeQueryManifest(queryId)`                 | Schema, checksums, and part metadata |
 | `downloadLakeQueryPart(queryId, part, options)` | Download one Parquet part            |
 | `getLakeCatalog()`                              | List queryable tables                |

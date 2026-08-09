@@ -1888,6 +1888,47 @@ export class NexusTradeClient {
     );
   }
 
+  /**
+   * Submit a natural-language lake ask. Returns immediately; poll it.
+   */
+  async createLakeAsk(question: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request("POST", "lake/ask", {
+        body: { question },
+      })
+    );
+  }
+
+  async getLakeAsk(askId: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "GET",
+        `lake/ask/${encodePathSegment(askId)}`
+      )
+    );
+  }
+
+  async cancelLakeAsk(askId: string): Promise<JsonObject> {
+    return operationOf(
+      await this.transport.request(
+        "POST",
+        `lake/ask/${encodePathSegment(askId)}/cancel`
+      )
+    );
+  }
+
+  /** Block until a lake ask is terminal. See `waitForOperation`. */
+  async waitForLakeAsk(
+    askId: string,
+    options: WaitOptions = {}
+  ): Promise<JsonObject> {
+    return waitForOperation(
+      (id) => this.getLakeAsk(id),
+      askId,
+      options
+    );
+  }
+
   async getLakeQueryManifest(queryId: string): Promise<JsonObject> {
     return operationOf(
       await this.transport.request(
