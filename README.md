@@ -68,6 +68,17 @@ For Claude Desktop and other stdio-only clients, use the established
 The live server exposes more than 120 tools across market research, portfolio
 construction, backtesting, optimization, walk-forward validation, managed
 compute, Aurora agents, paper trading, and controlled brokerage operations.
+Its creator-marketplace tools cover the full strategy adoption path:
+
+- `search_creators` discovers public creators and their marketplace portfolios.
+- `subscribe_portfolio` validates a monetized listing and returns a safe
+  checkout preview; the user completes payment in NexusTrade, never through the
+  MCP tool.
+- `fork_shared_portfolio` creates a one-time editable copy of a marketplace
+  strategy in a new or existing portfolio.
+- `copy_trade_shared` continuously mirrors an accessible strategy into a paper
+  or live portfolio at an explicit allocation.
+
 See the [developer guide](https://nexustrade.io/developers), the
 [utility tool reference](https://nexustrade.io/docs/api-reference/mcp-tools-utility),
 and the [Aurora tool reference](https://nexustrade.io/docs/api-reference/mcp-tools-aurora).
