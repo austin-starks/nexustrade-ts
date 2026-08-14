@@ -36,9 +36,11 @@ No server source, API keys, OAuth tokens, customer data, or internal deployment 
 
 ## Claims boundary
 
-Discovery copy may describe quantitative research, portfolio construction, backtesting, parameter sweeps, walk-forward studies, managed compute, paper trading, and authenticated trading operations because these capabilities exist in the live MCP tool surface.
+Discovery copy may describe quantitative research, portfolio construction, backtesting, parameter sweeps, walk-forward studies, managed compute, creator discovery, monetized strategy subscription handoffs, editable strategy forks, continuous copy trading, paper trading, and authenticated trading operations because these capabilities exist in the live MCP tool surface.
 
 Do not claim guaranteed returns, universal broker support, automatic execution without controls, or that a backtest proves live readiness. Live-impact tools remain subject to NexusTrade account permissions and approval controls.
+
+Keep the marketplace actions distinct: `subscribe_portfolio` only validates the listing and returns a credential-free checkout preview, `fork_shared_portfolio` makes a one-time editable copy, and `copy_trade_shared` creates the continuous mirroring relationship. The MCP server never receives payment credentials or completes a subscription charge.
 
 ## Verification
 
