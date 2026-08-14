@@ -1,0 +1,42 @@
+name: Publish MCP Registry metadata
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - server.json
+      - .github/workflows/publish-mcp-registry.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out metadata
+        uses: actions/checkout@v4
+
+      - name: Download MCP Publisher 1.8.1
+        run: >-
+          curl --fail --location --silent --show-error
+          --output mcp-publisher.tar.gz
+          https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
+
+      - name: Verify publisher checksum
+        run: echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher.tar.gz" | sha256sum --check
+
+      - name: Extract publisher
+        run: tar -xzf mcp-publisher.tar.gz mcp-publisher
+
+      - name: Validate metadata
+        run: ./mcp-publisher validate
+
+      - name: Authenticate with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish NexusTrade
+        run: ./mcp-publisher publish
