@@ -188,6 +188,42 @@ export interface LaunchAgentAction {
   skipPlanning: boolean;
   cooldownMinutes?: number;
 }
+export interface MeanVarianceAllocationPolicy {
+  type: "MeanVariance";
+  lookbackPeriods: number;
+  minimumObservations: number;
+  riskAversion: number;
+  expectedReturnShrinkage: number;
+  covarianceShrinkage: number;
+  turnoverPenalty: number;
+  estimatedTransactionCostBps: number;
+}
+export interface RiskParityAllocationPolicy {
+  type: "RiskParity";
+  lookbackPeriods: number;
+  minimumObservations: number;
+  covarianceShrinkage: number;
+  turnoverPenalty: number;
+  estimatedTransactionCostBps: number;
+}
+export interface MaximumDiversificationAllocationPolicy {
+  type: "MaximumDiversification";
+  lookbackPeriods: number;
+  minimumObservations: number;
+  covarianceShrinkage: number;
+  turnoverPenalty: number;
+  estimatedTransactionCostBps: number;
+}
+export type AllocationPolicy = MeanVarianceAllocationPolicy | RiskParityAllocationPolicy | MaximumDiversificationAllocationPolicy;
+export interface VolatilityTargetExposurePolicy {
+  type: "VolatilityTarget";
+  lookbackPeriods: number;
+  minimumObservations: number;
+  covarianceShrinkage: number;
+  targetAnnualizedVolatilityPercent: number;
+  estimatedTransactionCostBps: number;
+}
+export type ExposurePolicy = VolatilityTargetExposurePolicy;
 /** Book-level sizing is deploymentPercent. totalBudget is RebalanceOption-only and absent by design. */
 export interface DynamicRebalanceAction {
   type: "DynamicRebalance";
@@ -203,6 +239,8 @@ export interface DynamicRebalanceAction {
    * indicator values fail closed (retain). deploymentPercent: 0 overrides.
    */
   canSell?: Condition | CandidateCondition;
+  allocationPolicy?: AllocationPolicy;
+  exposurePolicy?: ExposurePolicy;
 }
 /** Book-level sizing is totalBudget. deploymentPercent is DynamicRebalance-only and absent by design. */
 export interface RebalanceOptionAction {
@@ -216,6 +254,8 @@ export interface RebalanceOptionAction {
   perNameAllocation?: OptionAllocation;
   positionScope?: RebalanceOptionPositionScope;
   sleeves?: RebalanceOptionSleeve[];
+  allocationPolicy?: AllocationPolicy;
+  exposurePolicy?: ExposurePolicy;
 }
 export type OptionParentSelectionSort = "oldest" | "highestPnl" | "nearestExpiry";
 export type ParentStrikeOffset =
@@ -456,6 +496,70 @@ export const multi = (
 /** Always-true gate for strategies whose cadence lives in the pipeline. */
 export const always = (): Condition => compare(Value(1), Value(0), "greaterThan");
 
+export const meanVarianceAllocation = (
+  config: Partial<Omit<MeanVarianceAllocationPolicy, "type">> = {},
+): MeanVarianceAllocationPolicy => ({
+  type: "MeanVariance",
+  lookbackPeriods: 252,
+  minimumObservations: 60,
+  riskAversion: 4,
+  expectedReturnShrinkage: 0.5,
+  covarianceShrinkage: 0.25,
+  turnoverPenalty: 1,
+  estimatedTransactionCostBps: 10,
+  ...config,
+});
+
+export const riskParityAllocation = (
+  config: Partial<Omit<RiskParityAllocationPolicy, "type">> = {},
+): RiskParityAllocationPolicy => ({
+  type: "RiskParity",
+  lookbackPeriods: 252,
+  minimumObservations: 60,
+  covarianceShrinkage: 0.25,
+  turnoverPenalty: 1,
+  estimatedTransactionCostBps: 10,
+  ...config,
+});
+
+export const maximumDiversificationAllocation = (
+  config: Partial<Omit<MaximumDiversificationAllocationPolicy, "type">> = {},
+): MaximumDiversificationAllocationPolicy => ({
+  type: "MaximumDiversification",
+  lookbackPeriods: 252,
+  minimumObservations: 60,
+  covarianceShrinkage: 0.25,
+  turnoverPenalty: 1,
+  estimatedTransactionCostBps: 10,
+  ...config,
+});
+
+export const volatilityTarget = (
+  config: Partial<Omit<VolatilityTargetExposurePolicy, "type">> = {},
+): VolatilityTargetExposurePolicy => ({
+  type: "VolatilityTarget",
+  lookbackPeriods: 60,
+  minimumObservations: 20,
+  covarianceShrinkage: 0.25,
+  targetAnnualizedVolatilityPercent: 12,
+  estimatedTransactionCostBps: 10,
+  ...config,
+});
+
+const rebalanceDecisionMetric = (
+  metric: "allocationDrift" | "plannedTurnover" | "estimatedCost" | "expectedBenefit" | "netBenefit",
+): Indicator => ({ type: "RebalanceDecisionMetric", metric });
+export const RebalanceAllocationDrift = (): Indicator =>
+  rebalanceDecisionMetric("allocationDrift");
+export const RebalancePlannedTurnover = (): Indicator =>
+  rebalanceDecisionMetric("plannedTurnover");
+export const RebalanceEstimatedCost = (): Indicator =>
+  rebalanceDecisionMetric("estimatedCost");
+export const RebalanceExpectedBenefit = (): Indicator =>
+  rebalanceDecisionMetric("expectedBenefit");
+export const RebalanceNetBenefit = (): Indicator =>
+  rebalanceDecisionMetric("netBenefit");
+
 export const filter = (condition: Condition): PipelineStage => ({ type: "Filter", condition });
 export const selectTop = (
   metric: Indicator, limit: number, direction: SelectDirection = "Highest",
@@ -494,6 +598,8 @@ export const dynamicRebalance = (config: {
   universe: Universe; pipeline: PipelineStage[]; weightIndicator: Indicator | CandidateIndicator;
   limit?: number; deploymentPercent?: number; perNameAllocation?: PerNameAllocation;
   canSell?: Condition | CandidateCondition;
+  allocationPolicy?: AllocationPolicy;
+  exposurePolicy?: ExposurePolicy;
 }): DynamicRebalanceAction => compact({ type: "DynamicRebalance", ...config }) as DynamicRebalanceAction;
 
 // ---- options ----
@@ -593,6 +699,8 @@ export const rebalanceOption = (config: {
   perNameAllocation?: OptionAllocation;
   positionScope?: RebalanceOptionPositionScope;
   sleeves?: RebalanceOptionSleeve[];
+  allocationPolicy?: AllocationPolicy;
+  exposurePolicy?: ExposurePolicy;
 }): RebalanceOptionAction => compact({ type: "RebalanceOption", ...config }) as RebalanceOptionAction;
 
 export const pnlTrigger = (bounds: { minPnlPercent?: number; maxPnlPercent?: number }): CloseOptionTrigger =>
@@ -1638,6 +1746,15 @@ export function PriceStandardDeviation(asset: AssetArg, length: number = 30, int
 }
 export const PriceStdDev = PriceStandardDeviation;
 /**
+ * RebalanceDecisionMetric indicator.
+ * @param metric Reads the prospective plan calculated by DynamicRebalance or RebalanceOption before the strategy condition runs.
+ */
+export function RebalanceDecisionMetric(metric: "allocationDrift" | "plannedTurnover" | "estimatedCost" | "expectedBenefit" | "netBenefit" = "netBenefit"): Indicator {
+  const d: Record<string, unknown> = { type: "RebalanceDecisionMetric" };
+  d["metric"] = metric;
+  return d as unknown as Indicator;
+}
+/**
  * RelativeStrengthIndex indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
@@ -2100,6 +2217,22 @@ export const geneStructureKind = (strategyIndex: number, values: string[]): Gene
   field: "StructureKind",
   scope: "Action",
   target: { scope: "Action", field: "StructureKind", strategyIndex },
+  values: values as unknown[],
+});
+
+/** Sweep AllocationPolicy (Action scope) over a value set. */
+export const geneAllocationPolicy = (strategyIndex: number, values: { label: string; policy: AllocationPolicy }[]): Gene => ({
+  field: "AllocationPolicy",
+  scope: "Action",
+  target: { scope: "Action", field: "AllocationPolicy", strategyIndex },
+  values: values as unknown[],
+});
+
+/** Sweep ExposurePolicy (Action scope) over a value set. */
+export const geneExposurePolicy = (strategyIndex: number, values: { label: string; policy: ExposurePolicy }[]): Gene => ({
+  field: "ExposurePolicy",
+  scope: "Action",
+  target: { scope: "Action", field: "ExposurePolicy", strategyIndex },
   values: values as unknown[],
 });
 
