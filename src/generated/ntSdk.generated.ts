@@ -2197,18 +2197,18 @@ export const geneDeploymentPct = (strategyIndex: number, values: number[]): Gene
 });
 
 /** Sweep RollTriggerDte (Action scope) over a value set. */
-export const geneRollTriggerDte = (strategyIndex: number, values: number[]): Gene => ({
+export const geneRollTriggerDte = (values: number[], strategyIndex?: number): Gene => ({
   field: "RollTriggerDte",
   scope: "Action",
-  target: { scope: "Action", field: "RollTriggerDte", strategyIndex },
+  target: { scope: "Action", field: "RollTriggerDte", ...(strategyIndex === undefined ? {} : { strategyIndex }) },
   values: values as unknown[],
 });
 
 /** Sweep TakeProfitPct (Action scope) over a value set. */
-export const geneTakeProfitPct = (strategyIndex: number, values: number[]): Gene => ({
+export const geneTakeProfitPct = (values: number[], strategyIndex?: number): Gene => ({
   field: "TakeProfitPct",
   scope: "Action",
-  target: { scope: "Action", field: "TakeProfitPct", strategyIndex },
+  target: { scope: "Action", field: "TakeProfitPct", ...(strategyIndex === undefined ? {} : { strategyIndex }) },
   values: values as unknown[],
 });
 
