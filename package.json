@@ -1,6 +1,6 @@
 {
   "name": "nexustrade",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Typed TypeScript SDK for NexusTrade portfolio authoring, backtesting, and optimization",
   "license": "MIT",
   "author": "Starks Technology",
