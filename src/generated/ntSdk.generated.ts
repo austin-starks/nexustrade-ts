@@ -2212,6 +2212,14 @@ export const geneTakeProfitPct = (values: number[], strategyIndex?: number): Gen
   values: values as unknown[],
 });
 
+/** Sweep StopLossPct (Action scope) over a value set. */
+export const geneStopLossPct = (values: number[], strategyIndex?: number): Gene => ({
+  field: "StopLossPct",
+  scope: "Action",
+  target: { scope: "Action", field: "StopLossPct", ...(strategyIndex === undefined ? {} : { strategyIndex }) },
+  values: values as unknown[],
+});
+
 /** Sweep StructureKind (Action scope) over a value set. */
 export const geneStructureKind = (strategyIndex: number, values: string[]): Gene => ({
   field: "StructureKind",
@@ -2257,6 +2265,14 @@ export const geneDteBracket = (strategyIndex: number, legIndex: number, values: 
   field: "DteBracket",
   scope: "OptionLeg",
   target: { scope: "OptionLeg", field: "DteBracket", strategyIndex, legIndex },
+  values: values as unknown[],
+});
+
+/** Sweep MaxSpreadPct (OptionLeg scope) over a value set. */
+export const geneMaxSpreadPct = (strategyIndex: number, legIndex: number, values: number[]): Gene => ({
+  field: "MaxSpreadPct",
+  scope: "OptionLeg",
+  target: { scope: "OptionLeg", field: "MaxSpreadPct", strategyIndex, legIndex },
   values: values as unknown[],
 });
 
