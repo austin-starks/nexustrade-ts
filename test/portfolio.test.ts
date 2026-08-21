@@ -68,6 +68,39 @@ describe("PortfolioHandle", () => {
     assert.equal(transport.calls[0]?.body?.id, undefined);
   });
 
+  it("exposes a fetched policy without returning it in authoring JSON", () => {
+    const policy = {
+      schemaVersion: 2,
+      revision: 4,
+      stockEligibility: {
+        minimumMarketCapUsd: 500_000_000,
+        maximumMarketCapUsd: null,
+        industryFilter: {
+          mode: "INCLUDE_ONLY",
+          match: "ALL",
+          industries: ["artificialIntelligence", "biotechnology"],
+        },
+        missingMarketCapBehavior: "EXCLUDE",
+        missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
+        appliesTo: "DYNAMIC_STOCK_UNIVERSES",
+      },
+      automatedApproval: {
+        enabled: false,
+        maxAutomatedTradesPerDay: 2,
+        countingUnit: "TRADE_ACTION",
+        dailyWindow: "AMERICA_NEW_YORK_CALENDAR_DAY",
+      },
+    };
+    const book = new PortfolioHandle({
+      name: "Policy",
+      strategies: [],
+      policy,
+    });
+
+    assert.deepEqual(book.policy, policy);
+    assert.equal(book.toJSON().policy, undefined);
+  });
+
   it("backtest prefers portfolioId once saved", async () => {
     const transport = new FakeTransport([
       { operations: [{ id: "bt-1", kind: "backtest", status: "running" }] },

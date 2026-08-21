@@ -31,5 +31,6 @@ export type {
   PortfolioHandleOptions,
   PortfolioListResult,
   PortfolioType,
+  ReadonlyPortfolioPolicy,
 } from "./portfolio.js";
 export * from "./generated/ntSdk.generated.js";

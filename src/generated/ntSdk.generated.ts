@@ -1929,13 +1929,13 @@ export interface JobRequest {
   args: Record<string, unknown>;
 }
 export interface BacktestConfig {
-  /** Backtest start date (ISO format, e.g. 2024-01-01) */
+  /** Backtest start date (ISO format, e.g. 2024-01-01). For interval=Minute, default first-look is the last 90 inclusive calendar days and the selected range cannot exceed 365 days. Do not use 2010-01-01 or a multi-year span on Minute. */
   startDate: string;
-  /** Backtest end date (ISO format, e.g. 2024-12-31) */
+  /** Backtest end date (ISO format, e.g. 2024-12-31). Minute hard max is 365 days from start_date; extend a survivor in a later run instead of splitting into yearly Minute jobs. */
   endDate: string;
   /** Benchmark for comparisonValue (buy-and-hold of this ticker). Defaults to SPY if omitted — use SPY only for broad equity/market strategies. For single-name options, set to that underlying (AAPL options → AAPL). For multi-name options books, run separate backtests with each material underlying as baseline (AAPL for AAPL sleeve, MSFT for MSFT), or equal-weight B&H of the traded universe — do not default to SPY. */
   baselineSymbol?: string;
-  /** Time interval: Day or Minute (default Day) */
+  /** Time interval: Day or Minute (default Day). Minute is a daytrade tape — first-look 90 days, hard max 365 days. */
   interval?: "Day" | "Minute";
   /** Starting portfolio value (default 10000) Range 1..inf. */
   initialValue?: number;
@@ -1945,7 +1945,7 @@ export interface BacktestConfig {
   feeConfig?: FeeConfig;
 }
 export interface WalkForwardConfig {
-  /** Global calendar start for the walk-forward study (ISO date). */
+  /** Global calendar start for the walk-forward study (ISO date). Minute seed first-look is 90 days; each Minute evaluation window still cannot exceed 365 days. */
   globalStartDate: string;
   /** Global calendar end for the walk-forward study (ISO date). */
   globalEndDate: string;
@@ -2009,9 +2009,9 @@ export interface WalkForwardConfig {
   genes?: Gene[];
 }
 export interface OptimizationConfig {
-  /** Optimization start date (ISO format, e.g. 2024-01-01) */
+  /** Optimization start date (ISO format, e.g. 2024-01-01). Minute interval inherits the backtest cap: first-look 90 days, hard max 365 days. */
   startDate: string;
-  /** Optimization end date (ISO format, e.g. 2024-12-31) */
+  /** Optimization end date (ISO format, e.g. 2024-12-31). Minute selected range cannot exceed 365 days. */
   endDate: string;
   /** Fitness functions: sharpeRatio, sortinoRatio, maxDrawdown, avgDrawdown, percentChange, dollarsSold, ulcerPerformanceIndex, participationRate, distinctUnderlyingsTraded, medianDeployment */
   fitnessFunctions?: ("sharpeRatio" | "sortinoRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment")[];

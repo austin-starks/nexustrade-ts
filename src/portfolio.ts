@@ -51,8 +51,73 @@ export interface PortfolioHandleOptions {
   transport?: Transport;
 }
 
+export interface ReadonlyPortfolioPolicy {
+  readonly schemaVersion: 2;
+  readonly revision: number;
+  readonly stockEligibility: {
+    readonly minimumMarketCapUsd: number;
+    readonly maximumMarketCapUsd: number | null;
+    readonly industryFilter: {
+      readonly mode: "ALL" | "INCLUDE_ONLY";
+      readonly match: "ANY" | "ALL";
+      readonly industries: readonly string[];
+    };
+    readonly missingMarketCapBehavior: "EXCLUDE";
+    readonly missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET";
+    readonly appliesTo: "DYNAMIC_STOCK_UNIVERSES";
+  };
+  readonly automatedApproval: {
+    readonly enabled: boolean;
+    readonly maxAutomatedTradesPerDay: number;
+    readonly countingUnit: "TRADE_ACTION";
+    readonly dailyWindow: "AMERICA_NEW_YORK_CALENDAR_DAY";
+  };
+  readonly updatedAt?: string;
+}
+
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isReadonlyPortfolioPolicy(
+  value: unknown,
+): value is ReadonlyPortfolioPolicy {
+  if (!isJsonObject(value) || value.schemaVersion !== 2) return false;
+  const stock = value.stockEligibility;
+  const automation = value.automatedApproval;
+  if (!isJsonObject(stock) || !isJsonObject(automation)) return false;
+  const industry = stock.industryFilter;
+  return (
+    typeof value.revision === "number" &&
+    Number.isSafeInteger(value.revision) &&
+    value.revision >= 0 &&
+    typeof stock.minimumMarketCapUsd === "number" &&
+    Number.isSafeInteger(stock.minimumMarketCapUsd) &&
+    stock.minimumMarketCapUsd >= 0 &&
+    (stock.maximumMarketCapUsd === null ||
+      (typeof stock.maximumMarketCapUsd === "number" &&
+        Number.isSafeInteger(stock.maximumMarketCapUsd) &&
+        stock.maximumMarketCapUsd >= stock.minimumMarketCapUsd)) &&
+    isJsonObject(industry) &&
+    (industry.mode === "ALL" || industry.mode === "INCLUDE_ONLY") &&
+    (industry.match === "ANY" || industry.match === "ALL") &&
+    isStringArray(industry.industries) &&
+    stock.missingMarketCapBehavior === "EXCLUDE" &&
+    stock.missingIndustryBehavior === "EXCLUDE_WHEN_FILTER_SET" &&
+    stock.appliesTo === "DYNAMIC_STOCK_UNIVERSES" &&
+    typeof automation.enabled === "boolean" &&
+    typeof automation.maxAutomatedTradesPerDay === "number" &&
+    Number.isSafeInteger(automation.maxAutomatedTradesPerDay) &&
+    automation.maxAutomatedTradesPerDay >= 1 &&
+    automation.maxAutomatedTradesPerDay <= 25 &&
+    automation.countingUnit === "TRADE_ACTION" &&
+    automation.dailyWindow === "AMERICA_NEW_YORK_CALENDAR_DAY" &&
+    (value.updatedAt === undefined || typeof value.updatedAt === "string")
+  );
 }
 
 function encodePathSegment(value: string): string {
@@ -79,6 +144,12 @@ export class PortfolioHandle implements Portfolio {
   createdAt?: string;
   updatedAt?: string;
   brokerage?: string;
+  /** Server-owned snapshot. It is intentionally omitted from authoring payloads. */
+  #policy?: ReadonlyPortfolioPolicy;
+
+  get policy(): ReadonlyPortfolioPolicy | undefined {
+    return this.#policy;
+  }
 
   #transport: Transport | null;
 
@@ -128,6 +199,9 @@ export class PortfolioHandle implements Portfolio {
     if (typeof record.createdAt === "string") this.createdAt = record.createdAt;
     if (typeof record.updatedAt === "string") this.updatedAt = record.updatedAt;
     if (typeof record.brokerage === "string") this.brokerage = record.brokerage;
+    if (isReadonlyPortfolioPolicy(record.policy)) {
+      this.#policy = record.policy;
+    }
 
     for (const [key, value] of Object.entries(record)) {
       if (
@@ -143,7 +217,8 @@ export class PortfolioHandle implements Portfolio {
         key === "strategyNames" ||
         key === "createdAt" ||
         key === "updatedAt" ||
-        key === "brokerage"
+        key === "brokerage" ||
+        key === "policy"
       ) {
         continue;
       }

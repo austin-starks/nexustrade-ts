@@ -66,11 +66,15 @@ function privateNames(sourceFile: string): Set<string> {
 function publicMethods(proto: object, sourceFile: string): string[] {
   const nonPublic = privateNames(sourceFile);
   return Object.getOwnPropertyNames(proto).filter(
-    (name) =>
-      name !== "constructor" &&
-      !name.startsWith("#") &&
-      !nonPublic.has(name) &&
-      typeof (proto as Record<string, unknown>)[name] === "function",
+    (name) => {
+      const descriptor = Object.getOwnPropertyDescriptor(proto, name);
+      return (
+        name !== "constructor" &&
+        !name.startsWith("#") &&
+        !nonPublic.has(name) &&
+        typeof descriptor?.value === "function"
+      );
+    },
   );
 }
 

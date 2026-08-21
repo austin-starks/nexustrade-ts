@@ -281,6 +281,11 @@ await client.listPortfolios({ includePaper: true, includePositions: true });
 await client.getPortfolio(portfolioId);
 ```
 
+Fetched portfolio handles include a typed, read-only `policy` snapshot. Trading
+policy changes are intentionally unavailable through the SDK; edit them in
+Portfolio Settings. `PortfolioHandle.toJSON()` omits the snapshot so a fetched
+portfolio cannot accidentally submit policy changes through an authoring call.
+
 `listPortfolios` filters with `includePaper`, `includeLive`, `includeInactive`,
 `includeChatPortfolios`, `search`, `limit`, and `page`. `includePositions`
 defaults off when `search` is set.
