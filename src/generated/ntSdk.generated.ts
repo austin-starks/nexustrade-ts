@@ -140,11 +140,23 @@ export interface DynamicUnderlying {
   pipeline?: PipelineStage[];
   limit?: number;
 }
+/**
+ * Minimum realised strike width, checked AFTER contracts resolve. Each leg snaps
+ * independently to the nearest listed strike, so the authored offsets and the
+ * realised width differ by up to a full grid step in either direction.
+ * minWidthPercent is a whole-number percent of spot (4 = 4%). Below the floor
+ * the structure is rejected and the next template in the ladder is tried.
+ */
+export interface SpreadWidthConstraint {
+  minWidthPercent?: number;
+  minWidthDollars?: number;
+}
 export interface OptionsBuilder {
   legs: OptionsBuilderLeg[];
   underlyingSymbol?: string;
   dynamicUnderlying?: DynamicUnderlying;
   spreadType?: OptionSpreadType;
+  widthConstraint?: SpreadWidthConstraint;
 }
 export interface OptionStructureTemplate {
   legs: OptionsBuilderLeg[];
@@ -152,6 +164,7 @@ export interface OptionStructureTemplate {
   /** May be candidate-bound (evaluated per underlying). */
   eligibility?: Condition | CandidateCondition;
   spreadType?: OptionSpreadType;
+  widthConstraint?: SpreadWidthConstraint;
 }
 /** Sleeves share the action-level totalBudget and cannot define their own. */
 export interface RebalanceOptionSleeve {
@@ -673,6 +686,7 @@ export const structureTemplate = (config: {
   name?: string;
   eligibility?: Condition | CandidateCondition;
   spreadType?: OptionSpreadType;
+  widthConstraint?: SpreadWidthConstraint;
 }): OptionStructureTemplate => compact(config) as OptionStructureTemplate;
 
 export const sleeve = (config: {
