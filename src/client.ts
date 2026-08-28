@@ -1698,11 +1698,18 @@ export class NexusTradeClient {
    */
   async createAgent(
     prompt: string,
-    options: { idempotencyKey: string; maxIterations?: number }
+    options: {
+      idempotencyKey: string;
+      maxIterations?: number;
+      costCeilingUsd?: number;
+    }
   ): Promise<AgentRun> {
     const body: JsonObject = { prompt };
     if (options.maxIterations !== undefined) {
       body.maxIterations = options.maxIterations;
+    }
+    if (options.costCeilingUsd !== undefined) {
+      body.costCeilingUsd = options.costCeilingUsd;
     }
     const response = await this.transport.request("POST", "agents", {
       body,

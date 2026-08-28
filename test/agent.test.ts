@@ -97,6 +97,26 @@ function fast<T extends { pollIntervalSeconds: number; maxPollIntervalSeconds: n
 }
 
 describe("agent run iteration", () => {
+  it("sends iteration and cost ceilings when creating a run", async () => {
+    const { nt, transport } = client([]);
+
+    await nt.createAgent("do a thing", {
+      idempotencyKey: "bounded",
+      maxIterations: 65,
+      costCeilingUsd: 20,
+    });
+
+    assert.deepEqual(transport.calls[0], {
+      method: "POST",
+      path: "agents",
+      body: {
+        prompt: "do a thing",
+        maxIterations: 65,
+        costCeilingUsd: 20,
+      },
+    });
+  });
+
   it("yields events until terminal", async () => {
     const { nt } = client([
       page([event("a", "first")]),

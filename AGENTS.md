@@ -258,6 +258,7 @@ ones the run cannot leave on its own, so the caller is the approver.
 ```ts
 const run = await client.createAgent("Find momentum names in the S&P 500", {
   idempotencyKey: "momentum-scan-v1",
+  costCeilingUsd: 20,
 });
 
 for await (const event of run) {
