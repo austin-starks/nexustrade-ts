@@ -631,6 +631,31 @@ export interface WaitOptions {
   raiseOnFailure?: boolean;
 }
 
+/**
+ * How much capital a backtest actually had on the line, reported alongside the
+ * return it earned. Read it off a terminal operation's `result.statistics`.
+ *
+ * Both fields are optional and nullable, and absence is meaningful: a backtest
+ * run before the engine reported collateral carries no value at all. That is
+ * NOT zero — these books lock a few thousand dollars against a portfolio worth
+ * orders of magnitude more, so substituting 0, or the portfolio's value, turns
+ * an unanswered question into a wrong answer. Show "not recorded" instead.
+ *
+ * Never reconstruct either number from `cash - buyingPower`: buying power is
+ * clamped at both ends and carries an open credit-spread premium term, so the
+ * inversion breaks precisely on the heavily collateralised books this measures.
+ */
+export interface BacktestCollateralStatistics {
+  /** Largest collateral locked at any tick of the run, in account currency. */
+  peakReservedCollateral?: number | null;
+  /**
+   * Median collateral across the ticks that HELD at least one position.
+   * Flat ticks are excluded on purpose — a 0DTE book is empty overnight and at
+   * weekends, and counting those ticks would drive the median to zero.
+   */
+  medianReservedCollateral?: number | null;
+}
+
 function operationFailure(
   operation: JsonObject,
   operationId: string,

@@ -9,6 +9,7 @@ export {
   waitForOperation,
 } from "./client.js";
 export type {
+  BacktestCollateralStatistics,
   CustomIndicatorInput,
   CustomIndicatorPointInput,
   HttpTransportOptions,

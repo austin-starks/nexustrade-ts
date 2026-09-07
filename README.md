@@ -122,6 +122,28 @@ Backtest operations may include `warnings: string[]` immediately after
 submission and again in the terminal `result`. Treat them as material caveats;
 they do not change a successful operation into a failure.
 
+### Collateral at risk
+
+A terminal operation's `result.statistics` answers how much capital the run had
+on the line, not only what it returned. Two fields carry it, typed as
+`BacktestCollateralStatistics`:
+
+| Field                       | Meaning                                                     |
+| --------------------------- | ----------------------------------------------------------- |
+| `peakReservedCollateral`    | Largest collateral locked at any tick, in account currency  |
+| `medianReservedCollateral`  | Median across the ticks that held at least one position     |
+
+Both are optional and may be `null`, and that absence is a real answer: a
+backtest run before the engine reported collateral has no value, which is not
+the same as a book that locked nothing. Display "not recorded" rather than `$0`
+— a zero here reads as "this strategy risks nothing", the opposite of what an
+unpopulated field means. Do not substitute the portfolio's value either: a book
+risking a few thousand dollars would be reported as risking all of it.
+
+Never reconstruct either number from `cash - buyingPower`. Buying power is
+clamped at both ends and carries an open credit-spread premium term, so the
+inversion breaks precisely on the heavily collateralised books this measures.
+
 ## Authoring strategies
 
 Every builder is generated from the same indicator specification the NexusTrade
