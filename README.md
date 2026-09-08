@@ -101,10 +101,7 @@ import {
   strategy,
 } from "nexustrade";
 
-const client = new NexusTradeClient({
-  apiKey: "sk-...",
-  baseUrl: "https://nexustrade.io/api/v1",
-});
+const client = new NexusTradeClient();
 
 const book = portfolio("Example", [
   strategy("Buy SPY", always(), buy(stockAsset("SPY"), 100)),
@@ -610,6 +607,8 @@ is missing here, so this list cannot drift from the code.
 | `createPortfolio(book, { idempotencyKey })` | Persist a portfolio definition               |
 | `listPortfolios(options)`                   | List portfolios, with filters and pagination |
 | `getPortfolio(portfolioId)`                 | Read one portfolio                           |
+| `updatePortfolio(id, operations, { idempotencyKey })` | Rename or edit strategies deterministically |
+| `forkPublicPortfolio(sharedId, { idempotencyKey })` | Fork a public portfolio into the workspace |
 | `deploy(portfolioId, { frequency })`        | Start paper trading it                       |
 | `undeploy(portfolioId)`                     | Stop it                                      |
 
@@ -630,6 +629,9 @@ is missing here, so this list cannot drift from the code.
 | `createOptimization(handle, { idempotencyKey })` | Submit an optimization      |
 | `getOptimization(optimizationId)`                | Read the operation          |
 | `waitForOptimization(optimizationId, options)`   | Block until terminal        |
+| `createSystematicSweep(handle, { idempotencyKey })` | Submit an explicit-gene sweep |
+| `getSystematicSweep(optimizationId)`             | Read the sweep operation      |
+| `waitForSystematicSweep(optimizationId, options)` | Block until terminal         |
 | `createWalkForward(handle, { idempotencyKey })`  | Submit a walk-forward study |
 | `getWalkForward(studyId)`                        | Read the operation          |
 | `waitForWalkForward(studyId, options)`           | Block until terminal        |
@@ -689,7 +691,10 @@ is missing here, so this list cannot drift from the code.
 | Method                                      | Purpose                                  |
 | ------------------------------------------- | ---------------------------------------- |
 | `new NexusTradeClient({ apiKey, baseUrl })` | Explicit credentials                     |
+| `new NexusTradeClient()`                    | Lazy anonymous workspace with strict limits |
 | `NexusTradeClient.fromEnvironment()`        | Read them from the environment or `.env` |
+| `exportWorkspaceSession()`                  | Export an anonymous workspace for later use |
+| `importWorkspaceSession(token)`             | Resume an existing anonymous workspace      |
 
 **PortfolioHandle** — returned by the `portfolio(...)` builder and by
 `getPortfolio` / `listPortfolios`.
@@ -703,8 +708,31 @@ is missing here, so this list cannot drift from the code.
 
 ## Authentication
 
-Create a key at **[nexustrade.io/developers](https://nexustrade.io/developers)**
-(Profile → API Keys). Keys start with `sk-` and are shown once.
+An API key is optional. With no key, the first API operation lazily creates a
+real unregistered NexusTrade workspace and applies stricter request, backtest,
+and AI limits. Anonymous workspaces can create, edit, and fork portfolios,
+launch backtests, and use the programmatic agent/chat surface. Every optimization
+operation—including genetic and systematic sweep launches, result reads,
+reruns, promotion, and out-of-sample workflows—requires a registered API key.
+Export the workspace's opaque token if the work must survive a new process:
+
+```ts
+const guest = new NexusTradeClient();
+await guest.listPortfolios();
+const token = guest.exportWorkspaceSession();
+
+const resumed = new NexusTradeClient({ workspaceSession: token });
+```
+
+An expired explicit workspace token raises
+`NexusTradeWorkspaceSessionExpiredError`; the SDK never creates a replacement
+workspace that would make saved work appear deleted.
+
+Registered users can create a key at
+**[nexustrade.io/developers](https://nexustrade.io/developers)** (Profile → API
+Keys). Keys start with `sk-` and are shown once. When both credentials are
+provided, registered `Authorization` takes precedence and the workspace header
+is not sent.
 
 ```ts
 const client = new NexusTradeClient({
@@ -731,8 +759,8 @@ written back to `process.env`. Opt out with `NEXUSTRADE_DISABLE_DOTENV=1`.
 
 | Scope   | Grants                                                                            |
 | ------- | --------------------------------------------------------------------------------- |
-| `read`  | `getBacktest`, `getOptimization`, `getWalkForward`                                |
-| `write` | `createPortfolio`, `createBacktest(s)`, `createOptimization`, `createWalkForward` |
+| `read`  | Portfolio, backtest, genetic, sweep, and walk-forward reads                       |
+| `write` | Portfolio create/edit/fork, backtests, genetic/sweep, and walk-forward launches   |
 | `lake`  | Lake catalog, query lifecycle, manifests, result parts                            |
 
 A key missing the scope gets `403 insufficient_scope`.
@@ -800,6 +828,8 @@ _job_ takes.
 
 Portfolio drafting, backtesting, optimization, walk-forward studies, and
 read-only SQL over the market-data lake, versioned under `/api/v1/nexustrade`.
+The full surface requires a registered API key; anonymous workspaces are limited
+to portfolio authoring/forking, backtests, and programmatic agent/chat calls.
 The screener and creating a live deployment remain outside this surface.
 Orders are reachable, but a live order is only ever staged for human approval —
 never submitted. `deploy` and `undeploy` act on whatever an existing id already

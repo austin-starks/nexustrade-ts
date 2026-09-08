@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
 import { HttpTransport, NexusTradeApiError } from "../src/client.ts";
+import { NexusTradeWorkspaceSessionExpiredError } from "../src/client.ts";
 
 const BASE_URL = "https://gateway.example/api/v1";
 const realFetch = globalThis.fetch;
@@ -39,6 +40,93 @@ afterEach(() => {
 });
 
 describe("HttpTransport", () => {
+  it("lazily bootstraps one anonymous workspace and reuses its header", async () => {
+    const calls = stubFetch((call) => {
+      if (call.url === "https://gateway.example/api/workspace/session") {
+        return jsonResponse({
+          workspaceSession: "ws-guest",
+          user: { id: "u-1", accountKind: "Unregistered" },
+          capabilities: {},
+          expiresAt: "2026-10-08T00:00:00.000Z",
+        });
+      }
+      return jsonResponse({ portfolios: [] });
+    });
+    const transport = new HttpTransport({ baseUrl: BASE_URL });
+
+    await Promise.all([
+      transport.request("GET", "portfolios"),
+      transport.request("GET", "portfolios"),
+    ]);
+
+    assert.equal(
+      calls.filter((call) => call.url.endsWith("/api/workspace/session")).length,
+      1,
+    );
+    for (const call of calls.filter((item) => item.url.includes("/nexustrade/"))) {
+      const headers = call.init.headers as Record<string, string>;
+      assert.equal(headers["X-NexusTrade-Session"], "ws-guest");
+      assert.equal(headers.Authorization, undefined);
+    }
+    assert.equal(transport.exportWorkspaceSession(), "ws-guest");
+  });
+
+  it("imports an anonymous workspace without calling bootstrap", async () => {
+    const calls = stubFetch(() => jsonResponse({ portfolios: [] }));
+    const transport = new HttpTransport({ baseUrl: BASE_URL });
+    transport.importWorkspaceSession("ws-resume");
+
+    await transport.request("GET", "portfolios");
+
+    assert.equal(calls.length, 1);
+    const headers = calls[0].init.headers as Record<string, string>;
+    assert.equal(headers["X-NexusTrade-Session"], "ws-resume");
+  });
+
+  it("registered Authorization takes precedence over a workspace session", async () => {
+    const calls = stubFetch(() => jsonResponse({ portfolios: [] }));
+    const transport = new HttpTransport({
+      apiKey: "sk-temp",
+      baseUrl: BASE_URL,
+      workspaceSession: "ws-ignored",
+    });
+
+    await transport.request("GET", "portfolios");
+
+    const headers = calls[0].init.headers as Record<string, string>;
+    assert.equal(headers.Authorization, "Bearer sk-temp");
+    assert.equal(headers["X-NexusTrade-Session"], undefined);
+  });
+
+  it("surfaces an expired explicit workspace as a typed error without replacement", async () => {
+    const calls = stubFetch(() =>
+      jsonResponse(
+        {
+          error: {
+            code: "workspace_session_expired",
+            message: "Anonymous workspace expired",
+          },
+        },
+        401,
+      ),
+    );
+    const transport = new HttpTransport({
+      baseUrl: BASE_URL,
+      workspaceSession: "ws-expired",
+    });
+
+    await assert.rejects(
+      () => transport.request("GET", "portfolios"),
+      (error: unknown) => {
+        assert.ok(error instanceof NexusTradeWorkspaceSessionExpiredError);
+        assert.equal(error.code, "workspace_session_expired");
+        return true;
+      },
+    );
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0].url.includes("/nexustrade/portfolios"));
+  });
+
   it("sends bearer and idempotency headers to the versioned path", async () => {
     const calls = stubFetch(() =>
       jsonResponse({ portfolio: { portfolioId: "p-1" } }),

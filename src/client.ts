@@ -80,6 +80,8 @@ const MAX_REDIRECTS = 5;
 // API, or it returned 2xx with an envelope the client could not use. Reporting
 // a literal 200 there would misattribute a 201 response.
 export const NO_HTTP_STATUS = 0;
+export const DEFAULT_API_BASE_URL = "https://nexustrade.io/api/v1";
+export const WORKSPACE_SESSION_HEADER = "X-NexusTrade-Session";
 
 // Polling defaults. Every NexusTrade job — backtest, optimization,
 // walk-forward, and any future operation kind — reports through the same
@@ -152,6 +154,19 @@ export class NexusTradeApiError extends Error {
     this.status = status;
     this.code = code;
     this.operationId = operationId;
+  }
+}
+
+/**
+ * An explicitly supplied anonymous workspace can no longer be resumed.
+ *
+ * The client deliberately does not create a replacement workspace after this
+ * error: doing so would make the caller's saved portfolios appear to vanish.
+ */
+export class NexusTradeWorkspaceSessionExpiredError extends NexusTradeApiError {
+  constructor(status: number, message: string) {
+    super(status, "workspace_session_expired", message);
+    this.name = "NexusTradeWorkspaceSessionExpiredError";
   }
 }
 
@@ -246,8 +261,9 @@ function supportsUpload(transport: Transport): transport is UploadTransport {
 }
 
 export interface HttpTransportOptions {
-  apiKey: string;
+  apiKey?: string;
   baseUrl: string;
+  workspaceSession?: string;
   timeoutSeconds?: number;
 }
 
@@ -261,6 +277,21 @@ function assertValidApiKey(apiKey: string): void {
     );
   if (invalid) {
     throw new Error("NexusTrade apiKey must be a non-empty token.");
+  }
+}
+
+function assertValidWorkspaceSession(workspaceSession: string): void {
+  const invalid =
+    typeof workspaceSession !== "string" ||
+    workspaceSession.length === 0 ||
+    [...workspaceSession].some(
+      (character) =>
+        /\s/.test(character) || (character.codePointAt(0) ?? 0) < 32
+    );
+  if (invalid) {
+    throw new Error(
+      "NexusTrade workspaceSession must be a non-empty opaque token."
+    );
   }
 }
 
@@ -361,16 +392,73 @@ function decodeJsonObject(bytes: Uint8Array, status: number): JsonObject {
   return decoded as JsonObject;
 }
 
-export class HttpTransport implements Transport, UploadTransport {
+async function apiErrorFromResponse(
+  response: Response
+): Promise<NexusTradeApiError> {
+  const { bytes } = await readCapped(response, MAX_ERROR_BYTES);
+  let code = "api_error";
+  let message = response.statusText || `HTTP ${response.status}`;
+  try {
+    const decoded = decodeJsonObject(bytes, response.status);
+    const errorBody = decoded.error;
+    if (
+      typeof errorBody === "object" &&
+      errorBody !== null &&
+      !Array.isArray(errorBody)
+    ) {
+      const body = errorBody as JsonObject;
+      if (body.code) code = String(body.code);
+      if (body.message) message = String(body.message);
+    }
+  } catch {
+    // Non-JSON error bodies keep the transport-level code/message.
+  }
+  if (code.toLowerCase() === "workspace_session_expired") {
+    return new NexusTradeWorkspaceSessionExpiredError(response.status, message);
+  }
+  return new NexusTradeApiError(response.status, code, message);
+}
+
+function workspaceSessionUrl(baseUrl: string): string {
+  const parsed = new URL(baseUrl);
+  parsed.pathname = "/api/workspace/session";
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString();
+}
+
+export interface WorkspaceSessionTransport extends Transport {
+  exportWorkspaceSession(): string | undefined;
+  importWorkspaceSession(workspaceSession: string): void;
+}
+
+function supportsWorkspaceSession(
+  transport: Transport
+): transport is WorkspaceSessionTransport {
+  const candidate = transport as Partial<WorkspaceSessionTransport>;
+  return (
+    typeof candidate.exportWorkspaceSession === "function" &&
+    typeof candidate.importWorkspaceSession === "function"
+  );
+}
+
+export class HttpTransport
+  implements Transport, UploadTransport, WorkspaceSessionTransport
+{
   // `#` fields, not TS `private` — the credential must be unreachable at
   // runtime too, matching the Python dataclass's `repr=False`.
-  readonly #apiKey: string;
+  readonly #apiKey?: string;
   readonly #baseUrl: string;
   readonly #timeoutSeconds: number;
+  #workspaceSession?: string;
+  #bootstrapPromise?: Promise<string>;
 
   constructor(options: HttpTransportOptions) {
     const timeoutSeconds = options.timeoutSeconds ?? 30;
-    assertValidApiKey(options.apiKey);
+    if (options.apiKey !== undefined) assertValidApiKey(options.apiKey);
+    if (options.workspaceSession !== undefined) {
+      assertValidWorkspaceSession(options.workspaceSession);
+    }
     assertValidBaseUrl(options.baseUrl);
     if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
       throw new Error("timeoutSeconds must be positive.");
@@ -378,10 +466,87 @@ export class HttpTransport implements Transport, UploadTransport {
     this.#apiKey = options.apiKey;
     this.#baseUrl = options.baseUrl;
     this.#timeoutSeconds = timeoutSeconds;
+    this.#workspaceSession = options.workspaceSession;
   }
 
   get baseUrl(): string {
     return this.#baseUrl;
+  }
+
+  exportWorkspaceSession(): string | undefined {
+    return this.#workspaceSession;
+  }
+
+  importWorkspaceSession(workspaceSession: string): void {
+    assertValidWorkspaceSession(workspaceSession);
+    this.#workspaceSession = workspaceSession;
+  }
+
+  async #credentialHeaders(): Promise<Record<string, string>> {
+    if (this.#apiKey !== undefined) {
+      return { Authorization: `Bearer ${this.#apiKey}` };
+    }
+    return { [WORKSPACE_SESSION_HEADER]: await this.#ensureWorkspaceSession() };
+  }
+
+  async #ensureWorkspaceSession(): Promise<string> {
+    if (this.#workspaceSession !== undefined) return this.#workspaceSession;
+    if (this.#bootstrapPromise !== undefined) return this.#bootstrapPromise;
+
+    this.#bootstrapPromise = this.#bootstrapWorkspaceSession();
+    try {
+      const workspaceSession = await this.#bootstrapPromise;
+      this.#workspaceSession = workspaceSession;
+      return workspaceSession;
+    } finally {
+      this.#bootstrapPromise = undefined;
+    }
+  }
+
+  async #bootstrapWorkspaceSession(): Promise<string> {
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(),
+      this.#timeoutSeconds * 1000
+    );
+    try {
+      let response: Response;
+      try {
+        response = await fetch(workspaceSessionUrl(this.#baseUrl), {
+          method: "POST",
+          headers: { Accept: "application/json" },
+          redirect: "manual",
+          signal: controller.signal,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new NexusTradeApiError(NO_HTTP_STATUS, "transport_error", reason);
+      }
+      if (!response.ok) throw await apiErrorFromResponse(response);
+      const { bytes, truncated } = await readCapped(
+        response,
+        MAX_RESPONSE_BYTES
+      );
+      if (truncated) {
+        throw new NexusTradeApiError(
+          response.status,
+          "response_too_large",
+          "NexusTrade workspace response exceeded the SDK size limit."
+        );
+      }
+      const decoded = decodeJsonObject(bytes, response.status);
+      if (typeof decoded.workspaceSession !== "string") {
+        throw new NexusTradeApiError(
+          response.status,
+          "invalid_response",
+          "Workspace response is missing workspaceSession."
+        );
+      }
+      assertValidWorkspaceSession(decoded.workspaceSession);
+      return decoded.workspaceSession;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** PUT a payload to a presigned storage URL. Sends no credential. */
@@ -477,7 +642,7 @@ export class HttpTransport implements Transport, UploadTransport {
     const payload =
       options.body !== undefined ? JSON.stringify(options.body) : undefined;
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.#apiKey}`,
+      ...(await this.#credentialHeaders()),
       Accept: "application/json",
     };
     if (payload !== undefined) headers["Content-Type"] = "application/json";
@@ -550,25 +715,7 @@ export class HttpTransport implements Transport, UploadTransport {
         }
 
         if (!response.ok) {
-          const { bytes } = await readCapped(response, MAX_ERROR_BYTES);
-          let code = "api_error";
-          let message = response.statusText || `HTTP ${response.status}`;
-          try {
-            const decoded = decodeJsonObject(bytes, response.status);
-            const errorBody = decoded.error;
-            if (
-              typeof errorBody === "object" &&
-              errorBody !== null &&
-              !Array.isArray(errorBody)
-            ) {
-              const body = errorBody as JsonObject;
-              if (body.code) code = String(body.code);
-              if (body.message) message = String(body.message);
-            }
-          } catch {
-            // Non-JSON error bodies keep the transport-level code/message.
-          }
-          throw new NexusTradeApiError(response.status, code, message);
+          throw await apiErrorFromResponse(response);
         }
 
         const { bytes, truncated } = await readCapped(
@@ -593,6 +740,7 @@ export class HttpTransport implements Transport, UploadTransport {
 export interface NexusTradeClientOptions {
   apiKey?: string;
   baseUrl?: string;
+  workspaceSession?: string;
   transport?: Transport;
 }
 
@@ -980,22 +1128,32 @@ export class NexusTradeClient {
       options.apiKey ?? environmentValue("NEXUSTRADE_API_KEY", dotenv);
     const baseUrl =
       options.baseUrl ?? environmentValue("NEXUSTRADE_API_BASE_URL", dotenv);
-    if (!apiKey || !baseUrl) {
-      throw new Error(
-        "NexusTradeClient requires an API key. Create one at " +
-          "https://nexustrade.io/developers, then either pass apiKey/baseUrl " +
-          "or set NEXUSTRADE_API_KEY and NEXUSTRADE_API_BASE_URL " +
-          "(base URL is https://nexustrade.io/api/v1). " +
-          "Both are also read from a .env file at or above the current " +
-          "directory; the real environment takes precedence. " +
-          "OAuth tokens are not accepted by this API."
-      );
-    }
-    this.transport = new HttpTransport({ apiKey, baseUrl });
+    this.transport = new HttpTransport({
+      apiKey,
+      baseUrl: baseUrl ?? DEFAULT_API_BASE_URL,
+      workspaceSession: options.workspaceSession,
+    });
   }
 
   static fromEnvironment(): NexusTradeClient {
     return new NexusTradeClient();
+  }
+
+  /** Return the anonymous workspace token after the first API call bootstraps it. */
+  exportWorkspaceSession(): string | undefined {
+    return supportsWorkspaceSession(this.transport)
+      ? this.transport.exportWorkspaceSession()
+      : undefined;
+  }
+
+  /** Resume an existing anonymous workspace without creating a replacement. */
+  importWorkspaceSession(workspaceSession: string): void {
+    if (!supportsWorkspaceSession(this.transport)) {
+      throw new Error(
+        "The configured transport does not support workspace sessions."
+      );
+    }
+    this.transport.importWorkspaceSession(workspaceSession);
   }
 
   async createPortfolio(
@@ -1086,6 +1244,74 @@ export class NexusTradeClient {
       );
     }
     return portfolioHandleFromWire(portfolio, {
+      transport: this.transport,
+    });
+  }
+
+  /**
+   * Apply deterministic no-code portfolio edits without invoking Aurora.
+   * Guest workspaces may rename and add/remove/replace strategies; deployment,
+   * scheduling, policy, and trading operations remain account-only.
+   */
+  async updatePortfolio(
+    portfolioId: string,
+    operations: ReadonlyArray<JsonObject>,
+    options: { idempotencyKey: string }
+  ): Promise<PortfolioHandle> {
+    if (operations.length === 0) {
+      throw new Error("updatePortfolio needs at least one operation.");
+    }
+    const response = await this.transport.request(
+      "POST",
+      `portfolios/${encodePathSegment(portfolioId)}/operations`,
+      {
+        body: { operations: operations.map((operation) => ({ ...operation })) },
+        idempotencyKey: options.idempotencyKey,
+      }
+    );
+    if (!isJsonObject(response.portfolio)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Portfolio update response is missing portfolio."
+      );
+    }
+    return portfolioHandleFromWire(response.portfolio, {
+      transport: this.transport,
+    });
+  }
+
+  /** Fork a public/shared portfolio into this workspace as an editable copy. */
+  async forkPublicPortfolio(
+    sharedPortfolioId: string,
+    options: {
+      idempotencyKey: string;
+      targetPortfolioId?: string;
+      name?: string;
+      mode?: "replace" | "append";
+    }
+  ): Promise<PortfolioHandle> {
+    const body: JsonObject = {
+      target: options.targetPortfolioId ? "existing" : "new",
+      mode: options.mode ?? "replace",
+    };
+    if (options.targetPortfolioId) {
+      body.targetPortfolioId = options.targetPortfolioId;
+    }
+    if (options.name) body.name = options.name;
+    const response = await this.transport.request(
+      "POST",
+      `shared-portfolios/${encodePathSegment(sharedPortfolioId)}/fork`,
+      { body, idempotencyKey: options.idempotencyKey }
+    );
+    if (!isJsonObject(response.portfolio)) {
+      throw new NexusTradeApiError(
+        NO_HTTP_STATUS,
+        "invalid_response",
+        "Portfolio fork response is missing portfolio."
+      );
+    }
+    return portfolioHandleFromWire(response.portfolio, {
       transport: this.transport,
     });
   }
@@ -1801,6 +2027,7 @@ export class NexusTradeClient {
     return operationOf(response);
   }
 
+  /** Requires a registered API key; anonymous workspaces cannot optimize. */
   async createOptimization(
     handle: JobInput,
     options: { idempotencyKey: string }
@@ -1812,6 +2039,7 @@ export class NexusTradeClient {
     );
   }
 
+  /** Requires a registered API key, including result reads. */
   async getOptimization(optimizationId: string): Promise<JsonObject> {
     const response = await this.transport.request(
       "GET",
@@ -1820,6 +2048,24 @@ export class NexusTradeClient {
     return operationOf(response);
   }
 
+  /** Submit a deterministic systematic sweep. Requires a registered API key. */
+  async createSystematicSweep(
+    handle: JobInput,
+    options: { idempotencyKey: string }
+  ): Promise<JsonObject> {
+    return this.createPortfolioJob("sweeps", handle, options.idempotencyKey);
+  }
+
+  /** Requires a registered API key, including sweep result reads. */
+  async getSystematicSweep(optimizationId: string): Promise<JsonObject> {
+    const response = await this.transport.request(
+      "GET",
+      `sweeps/${encodePathSegment(optimizationId)}`
+    );
+    return operationOf(response);
+  }
+
+  /** Requires a registered API key; anonymous workspaces cannot optimize. */
   async createWalkForward(
     handle: JobInput,
     options: { idempotencyKey: string }
@@ -2043,6 +2289,18 @@ export class NexusTradeClient {
   ): Promise<JsonObject> {
     return waitForOperation(
       (id) => this.getOptimization(id),
+      optimizationId,
+      options
+    );
+  }
+
+  /** Resolve once a systematic sweep is terminal. */
+  async waitForSystematicSweep(
+    optimizationId: string,
+    options: WaitOptions = {}
+  ): Promise<JsonObject> {
+    return waitForOperation(
+      (id) => this.getSystematicSweep(id),
       optimizationId,
       options
     );

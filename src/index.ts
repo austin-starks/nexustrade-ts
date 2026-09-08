@@ -4,6 +4,7 @@ export {
   HttpTransport,
   NexusTradeApiError,
   NexusTradeClient,
+  NexusTradeWorkspaceSessionExpiredError,
   createCustomIndicator,
   createPortfolio,
   waitForOperation,
@@ -21,6 +22,7 @@ export type {
   Transport,
   UploadTransport,
   WaitOptions,
+  WorkspaceSessionTransport,
 } from "./client.js";
 export {
   PortfolioHandle,

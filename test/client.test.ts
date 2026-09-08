@@ -43,6 +43,29 @@ class FakeTransport implements Transport {
 }
 
 describe("NexusTradeClient", () => {
+  it("supports importing and exporting anonymous workspace sessions", () => {
+    const sessions: string[] = [];
+    const transport: Transport & {
+      exportWorkspaceSession(): string;
+      importWorkspaceSession(value: string): void;
+    } = {
+      async request(): Promise<JsonObject> {
+        return {};
+      },
+      exportWorkspaceSession(): string {
+        return sessions.at(-1) ?? "";
+      },
+      importWorkspaceSession(value: string): void {
+        sessions.push(value);
+      },
+    };
+    const client = new NexusTradeClient({ transport });
+
+    client.importWorkspaceSession("ws-transfer");
+
+    assert.equal(client.exportWorkspaceSession(), "ws-transfer");
+  });
+
   it("create_portfolio uses stable JSON contract", async () => {
     const transport = new FakeTransport([
       { portfolio: { portfolioId: "p-1", portfolioName: "Book" } },
@@ -61,6 +84,73 @@ describe("NexusTradeClient", () => {
         path: "portfolios",
         body: { name: "Book", strategies: [{ name: "s" }] },
         idempotencyKey: "book-v1",
+      },
+    ]);
+  });
+
+  it("supports deterministic edit, public fork, and systematic sweep contracts", async () => {
+    const transport = new FakeTransport([
+      { portfolio: { id: "p-1", name: "Renamed" } },
+      { portfolio: { id: "p-2", name: "Forked" } },
+      { operation: { id: "sweep-1", kind: "optimization", status: "running" } },
+      { operation: { id: "sweep-1", kind: "optimization", status: "completed" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    const edited = await client.updatePortfolio(
+      "p-1",
+      [{ type: "rename", name: "Renamed" }],
+      { idempotencyKey: "edit-v1" }
+    );
+    const forked = await client.forkPublicPortfolio("shared-1", {
+      idempotencyKey: "fork-v1",
+      name: "Forked",
+    });
+    const sweep = await client.createSystematicSweep(
+      {
+        tool: "optimize_portfolio",
+        portfolio: { name: "Book", strategies: [{}] },
+        args: { genes: [{ scope: "Action", field: "TakeProfitPct", values: [1, 2] }] },
+      },
+      { idempotencyKey: "sweep-v1" }
+    );
+    const completed = await client.getSystematicSweep("sweep-1");
+
+    assert.equal(edited.id, "p-1");
+    assert.equal(forked.id, "p-2");
+    assert.equal(sweep.id, "sweep-1");
+    assert.equal(completed.status, "completed");
+    assert.deepEqual(transport.calls, [
+      {
+        method: "POST",
+        path: "portfolios/p-1/operations",
+        body: { operations: [{ type: "rename", name: "Renamed" }] },
+        idempotencyKey: "edit-v1",
+      },
+      {
+        method: "POST",
+        path: "shared-portfolios/shared-1/fork",
+        body: { target: "new", mode: "replace", name: "Forked" },
+        idempotencyKey: "fork-v1",
+      },
+      {
+        method: "POST",
+        path: "sweeps",
+        body: {
+          portfolio: { name: "Book", strategies: [{}] },
+          args: {
+            genes: [
+              { scope: "Action", field: "TakeProfitPct", values: [1, 2] },
+            ],
+          },
+        },
+        idempotencyKey: "sweep-v1",
+      },
+      {
+        method: "GET",
+        path: "sweeps/sweep-1",
+        body: undefined,
+        idempotencyKey: undefined,
       },
     ]);
   });
@@ -205,7 +295,7 @@ describe("NexusTradeClient", () => {
     );
   });
 
-  it("does not reuse unrelated OpenAI credentials from the environment", () => {
+  it("uses a fresh anonymous workspace instead of unrelated OpenAI credentials", () => {
     const saved = {
       key: process.env.NEXUSTRADE_API_KEY,
       url: process.env.NEXUSTRADE_API_BASE_URL,
@@ -214,7 +304,8 @@ describe("NexusTradeClient", () => {
     delete process.env.NEXUSTRADE_API_BASE_URL;
     process.env.OPENAI_API_KEY = "sk-unrelated";
     try {
-      assert.throws(() => NexusTradeClient.fromEnvironment());
+      const client = NexusTradeClient.fromEnvironment();
+      assert.equal(client.exportWorkspaceSession(), undefined);
     } finally {
       delete process.env.OPENAI_API_KEY;
       if (saved.key !== undefined) process.env.NEXUSTRADE_API_KEY = saved.key;
