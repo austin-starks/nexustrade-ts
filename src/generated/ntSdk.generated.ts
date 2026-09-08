@@ -327,7 +327,8 @@ export interface Strategy {
   active?: boolean;
 }
 export interface Portfolio {
-  name: string; initialValue?: number; strategies: Strategy[];
+  name: string; initialValue?: number; cash?: number; buyingPower?: number;
+  strategies: Strategy[];
   main?: boolean; supportsFractionalShares?: boolean; supportsCrypto?: boolean;
   alertsEnabled?: boolean;
 }
@@ -770,7 +771,17 @@ export const portfolio = (
     initialValue?: number; main?: boolean;
     supportsFractionalShares?: boolean; supportsCrypto?: boolean; alertsEnabled?: boolean;
   } = {},
-): PortfolioHandle => new PortfolioHandle(compact({ name, initialValue: 10000, ...options, strategies }));
+): PortfolioHandle => {
+  const initialValue = options.initialValue ?? 10000;
+  return new PortfolioHandle(compact({
+    name,
+    initialValue,
+    cash: initialValue,
+    buyingPower: initialValue,
+    ...options,
+    strategies,
+  }));
+};
 
 // ---- generated indicator builders ----
 /**
