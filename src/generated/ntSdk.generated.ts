@@ -508,23 +508,23 @@ export const multi = (
   count: number, comparison: Comparator, ...conditions: Condition[]
 ): Condition => ({ type: "Multi", comparison, value: count, conditions });
 /**
- * Sequence. `sequence(30, "Minute", A, B)` is true at tick t when B is true at t
+ * Sequence. `andThen(30, "Minute", A, B)` is true at tick t when B is true at t
  * and A was true at some STRICTLY EARLIER tick in the preceding 30 minutes.
  *
  * Simultaneous A and B does not fire — that is `and`. The window applies per
  * transition, so with three or more steps each one must occur within the window
  * of the step before it. Nesting is legal and means something different:
- * `sequence(W, sequence(W, A, B), C)` is not `sequence(W, A, B, C)`.
+ * `andThen(W, andThen(W, A, B), C)` is not `andThen(W, A, B, C)`.
  *
  * `interval` is REQUIRED and has no default. An omitted interval would fall
  * back to Day and silently kill an intraday setup.
  *
- * Named `sequence` rather than `then`: a module namespace with a callable
+ * Named `andThen` rather than `then`: a module namespace with a callable
  * `then` export is assimilated as a thenable, so `await import("nexustrade")`
  * would call it with resolve/reject and never settle. Emits wire type "Then",
  * the same way atLeast/atMost/exactly emit "Multi".
  */
-export const sequence = (
+export const andThen = (
   length: number, interval: Interval, ...conditions: Condition[]
 ): Condition => ({ type: "Then", conditions, window: { length, interval } });
 /** Always-true gate for strategies whose cadence lives in the pipeline. */
