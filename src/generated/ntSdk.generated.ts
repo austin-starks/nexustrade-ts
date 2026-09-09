@@ -594,35 +594,6 @@ export const RebalanceExpectedBenefit = (): Indicator =>
 export const RebalanceNetBenefit = (): Indicator =>
   rebalanceDecisionMetric("netBenefit");
 
-/**
- * The value `operand` held at the most recent FILLED entry for `asset` on
- * `side` — a level frozen at the fill rather than a rolling one.
- *
- * `MinimumPrice(spy, 5, "Minute")` rolls forward every bar, so a stop written
- * against it is silently a TRAILING stop and every R-multiple measured off it is
- * measured against a moving risk. Wrapping it here freezes the level the trade
- * was actually taken at, so the stop and the target reference the same number.
- *
- * Undefined while flat or before any fill, which gates the condition OFF rather
- * than firing it. Snapshotting is observe-and-snapshot, so the level can lag the
- * fill by up to one bar.
- *
- * This reads ORDER STATE, so a strategy using it cannot be materialised
- * columnar — the same cost `LastOrderPrice` already carries. Do not reach for
- * it when a rolling window would do.
- */
-export const IndicatorAtEntry = (
-  operand: Indicator, asset: AssetArg, side: Side = "Buy",
-): Indicator => {
-  const d: Record<string, unknown> = {
-    type: "IndicatorAtEntry",
-    indicators: [operand],
-    side,
-    orderStatus: "Filled",
-  };
-  setAsset(d, "targetAsset", asset);
-  return d as unknown as Indicator;
-};
 
 export const filter = (condition: Condition): PipelineStage => ({ type: "Filter", condition });
 export const selectTop = (
@@ -1183,6 +1154,20 @@ export function ImpliedVolatility(asset: AssetArg, dte: number = 30): Indicator 
 export function Index(metric: "VIX" | "SPX" | "NDX" | "DJI" | "RUT" | "SKEW" | "VVIX" | "USDBROAD" | "TNX" = "VIX"): Indicator {
   const d: Record<string, unknown> = { type: "Index" };
   d["metric"] = metric;
+  return d as unknown as Indicator;
+}
+/**
+ * IndicatorAtEntry indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param side The side of the fill the value is anchored to
+ * @param orderStatus Matches order events with this status
+ */
+export function IndicatorAtEntry(operand: Indicator, asset: AssetArg, side: Side, orderStatus: OrderStatus = "Filled"): Indicator {
+  const d: Record<string, unknown> = { type: "IndicatorAtEntry" };
+  setAsset(d, "targetAsset", asset);
+  d["side"] = side;
+  d["orderStatus"] = orderStatus;
+  d.indicators = [operand];
   return d as unknown as Indicator;
 }
 /**
