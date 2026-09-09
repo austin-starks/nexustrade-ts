@@ -180,6 +180,72 @@ Combine with `nt.and`, `nt.or`, `nt.atLeast`, `nt.atMost`, `nt.exactly`.
 </details>
 
 <details>
+<summary><b>Sequence two events, and freeze a level at entry</b></summary>
+
+`nt.sequence(length, interval, ...conditions)` fires when the LAST condition is true
+now and the one before it was true at a **strictly earlier** tick inside the
+window. `nt.and(...)` is the simultaneous form. The interval is required and has
+no default, because a silent `Day` fallback kills an intraday setup.
+
+`nt.IndicatorAtEntry(operand, asset, side?)` freezes what `operand` read at the
+most recent filled entry. A rolling window keeps moving, so a stop written
+straight against `nt.MinimumPrice(spy, 5, "Minute")` is a **trailing** stop and
+the R-multiple measured off it is measured against a moving risk.
+
+```ts
+const spy = nt.stockAsset("SPY");
+const entry = nt.LastOrderPrice(spy, "Buy", "Filled");
+const stopLevel = nt.IndicatorAtEntry(nt.MinimumPrice(spy, 5, "Minute"), spy, "Buy");
+
+const book = nt.portfolio("Break and hold", [
+  nt.strategy(
+    "Red 15m candle, then a break of its high",
+    nt.and(
+      nt.eq(nt.PositionValue(spy), 0),
+      nt.sequence(
+        30,
+        "Minute",
+        nt.lt(nt.IndicatorWindowAgo(nt.PriceRateOfChange(spy, 15, "Minute"), 15, "Minute"), 0),
+        nt.gt(
+          nt.CrossAbove(
+            nt.Price(spy),
+            nt.IndicatorWindowAgo(nt.MaximumPrice(spy, 15, "Minute"), 15, "Minute"),
+          ),
+          0,
+        ),
+      ),
+    ),
+    nt.buy(spy, 100, "percent of buying power"),
+  ),
+  nt.strategy(
+    "Stop under the low that was there at entry",
+    nt.and(nt.gt(nt.PositionValue(spy), 0), nt.lt(nt.Price(spy), stopLevel)),
+    nt.sell(spy, 100, "percent of current positions"),
+  ),
+  nt.strategy(
+    "Take profit at 2.5R off the risk actually taken",
+    nt.and(
+      nt.gt(nt.PositionValue(spy), 0),
+      nt.gte(
+        nt.Price(spy),
+        nt.Plus(entry, nt.Multiply(nt.Value(2.5), nt.Minus(entry, stopLevel))),
+      ),
+    ),
+    nt.sell(spy, 100, "percent of current positions"),
+  ),
+]);
+```
+
+The stop and the target now reference the same frozen number, so the reward is
+measured against the risk actually taken. Scalars are `nt.Value(2.5)` — the
+arithmetic builders take indicators on both sides.
+
+`IndicatorAtEntry` reads order state, so a strategy using it cannot be
+materialised columnar. `nt.LastOrderPrice` already carries that cost, but it is
+a real reason not to reach for either casually.
+</details>
+
+<details>
 <summary><b>Rank and rotate a universe</b></summary>
 
 `CANDIDATE` is the placeholder for "each name being evaluated". Use it inside a

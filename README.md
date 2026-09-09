@@ -187,7 +187,8 @@ const book = nt.portfolio(
 | **Options**         | `OptionDaysToExpiration` `OptionCollateral` `OptionUnrealizedPnL` `openOption` `closeOption` |
 | **Actions**         | `buy` `sell` `alert` `dynamicRebalance` `rebalanceOption`                                    |
 | **Selection**       | `filter` `selectTop` `selectPercentile` `universe`                                           |
-| **Logic**           | `always` `atLeast` `atMost` `exactly` `fewerThan` `multi` `and` `or`                         |
+| **Logic**           | `always` `atLeast` `atMost` `exactly` `fewerThan` `multi` `and` `or` `sequence`              |
+| **Anchored levels** | `IndicatorAtEntry` `LastOrderPrice` `IndicatorAtMinutesAfterOpen` `IndicatorWindowAgo`       |
 
 Every builder is fully typed — your editor completes the whole surface.
 

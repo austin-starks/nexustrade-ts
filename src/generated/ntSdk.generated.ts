@@ -507,6 +507,26 @@ export const exactly = (count: number, ...conditions: Condition[]): Condition =>
 export const multi = (
   count: number, comparison: Comparator, ...conditions: Condition[]
 ): Condition => ({ type: "Multi", comparison, value: count, conditions });
+/**
+ * Sequence. `sequence(30, "Minute", A, B)` is true at tick t when B is true at t
+ * and A was true at some STRICTLY EARLIER tick in the preceding 30 minutes.
+ *
+ * Simultaneous A and B does not fire — that is `and`. The window applies per
+ * transition, so with three or more steps each one must occur within the window
+ * of the step before it. Nesting is legal and means something different:
+ * `sequence(W, sequence(W, A, B), C)` is not `sequence(W, A, B, C)`.
+ *
+ * `interval` is REQUIRED and has no default. An omitted interval would fall
+ * back to Day and silently kill an intraday setup.
+ *
+ * Named `sequence` rather than `then`: a module namespace with a callable
+ * `then` export is assimilated as a thenable, so `await import("nexustrade")`
+ * would call it with resolve/reject and never settle. Emits wire type "Then",
+ * the same way atLeast/atMost/exactly emit "Multi".
+ */
+export const sequence = (
+  length: number, interval: Interval, ...conditions: Condition[]
+): Condition => ({ type: "Then", conditions, window: { length, interval } });
 /** Always-true gate for strategies whose cadence lives in the pipeline. */
 export const always = (): Condition => compare(Value(1), Value(0), "greaterThan");
 
@@ -573,6 +593,36 @@ export const RebalanceExpectedBenefit = (): Indicator =>
   rebalanceDecisionMetric("expectedBenefit");
 export const RebalanceNetBenefit = (): Indicator =>
   rebalanceDecisionMetric("netBenefit");
+
+/**
+ * The value `operand` held at the most recent FILLED entry for `asset` on
+ * `side` — a level frozen at the fill rather than a rolling one.
+ *
+ * `MinimumPrice(spy, 5, "Minute")` rolls forward every bar, so a stop written
+ * against it is silently a TRAILING stop and every R-multiple measured off it is
+ * measured against a moving risk. Wrapping it here freezes the level the trade
+ * was actually taken at, so the stop and the target reference the same number.
+ *
+ * Undefined while flat or before any fill, which gates the condition OFF rather
+ * than firing it. Snapshotting is observe-and-snapshot, so the level can lag the
+ * fill by up to one bar.
+ *
+ * This reads ORDER STATE, so a strategy using it cannot be materialised
+ * columnar — the same cost `LastOrderPrice` already carries. Do not reach for
+ * it when a rolling window would do.
+ */
+export const IndicatorAtEntry = (
+  operand: Indicator, asset: AssetArg, side: Side = "Buy",
+): Indicator => {
+  const d: Record<string, unknown> = {
+    type: "IndicatorAtEntry",
+    indicators: [operand],
+    side,
+    orderStatus: "Filled",
+  };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+};
 
 export const filter = (condition: Condition): PipelineStage => ({ type: "Filter", condition });
 export const selectTop = (
