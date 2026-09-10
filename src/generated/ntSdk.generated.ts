@@ -317,6 +317,22 @@ export type Action =
   | OpenOptionAction
   | CloseOptionAction;
 
+export type StrategyLimitWorkingTime =
+  | { type: "Day" }
+  | { type: "Minutes"; minutes: number };
+export type StrategyLimitPricePolicy =
+  | { type: "QuoteRelative"; reference: "Current" }
+  | { type: "UnitPrice"; amount: number }
+  | { type: "MaximumNetDebit"; amount: number }
+  | { type: "MinimumNetCredit"; amount: number };
+export type StrategyOrderExecutionPolicy =
+  | { type: "Market" }
+  | {
+      type: "Limit";
+      price: StrategyLimitPricePolicy;
+      workingTime?: StrategyLimitWorkingTime;
+    };
+
 /**
  * `automaticOrderApproval` is deliberately absent. It is system-managed and always
  * false for agent-created strategies, and placing it on an action fails validation —
@@ -325,6 +341,8 @@ export type Action =
 export interface Strategy {
   name: string; condition: StrategyCondition; action: Action;
   active?: boolean;
+  /** Omitted means Market. Limit always requires an explicit price policy. */
+  orderExecution?: StrategyOrderExecutionPolicy;
 }
 export interface Portfolio {
   name: string; initialValue?: number; cash?: number; buyingPower?: number;
@@ -761,12 +779,50 @@ export const closeOption = (config: {
   quantity?: CloseQuantity;
 } = {}): CloseOptionAction => compact({ type: "CloseOption", ...config }) as CloseOptionAction;
 
+export const limitOrder = (config: {
+  price: StrategyLimitPricePolicy;
+  workingTime?: StrategyLimitWorkingTime;
+}): StrategyOrderExecutionPolicy => compact({ type: "Limit", ...config }) as StrategyOrderExecutionPolicy;
+
+export const currentLimit = (): StrategyLimitPricePolicy => ({
+  type: "QuoteRelative",
+  reference: "Current",
+});
+
+export const unitPriceLimit = (amount: number): StrategyLimitPricePolicy => ({
+  type: "UnitPrice",
+  amount,
+});
+
+export const maximumNetDebit = (amount: number): StrategyLimitPricePolicy => ({
+  type: "MaximumNetDebit",
+  amount,
+});
+
+export const minimumNetCredit = (amount: number): StrategyLimitPricePolicy => ({
+  type: "MinimumNetCredit",
+  amount,
+});
+
+export const goodForDay = (): StrategyLimitWorkingTime => ({ type: "Day" });
+
+export const goodForMinutes = (minutes: number): StrategyLimitWorkingTime => ({
+  type: "Minutes",
+  minutes,
+});
+
 // ---- assembly ----
 
 export const strategy = (
   name: string, condition: StrategyCondition, action: Action,
-  options: { active?: boolean } = {},
-): Strategy => compact({ name, condition, action, ...options }) as Strategy;
+  options: { active?: boolean; orderExecution?: StrategyOrderExecutionPolicy } = {},
+): Strategy => compact({
+  name,
+  condition,
+  action,
+  ...options,
+  orderExecution: options.orderExecution ?? { type: "Market" },
+}) as Strategy;
 
 /**
  * Session / clock flatten — condition carries the gate (MinutesAfterOpen, Day, …).

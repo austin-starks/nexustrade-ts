@@ -174,6 +174,30 @@ const book = nt.portfolio(
 );
 ```
 
+Order execution belongs to the strategy. Omit it for the backward-compatible
+Market default, use a fixed unit price for Buy/Sell, or set an option strategy's
+maximum net debit / minimum net credit:
+
+```ts
+nt.strategy("Buy SPY at my price", nt.always(), nt.buy(nt.stockAsset("SPY"), 10), {
+  orderExecution: nt.limitOrder({
+    price: nt.unitPriceLimit(500),
+    workingTime: nt.goodForDay(),
+  }),
+});
+
+nt.strategy("Sell the spread for $1.50 or better", nt.always(), optionAction, {
+  orderExecution: nt.limitOrder({
+    price: nt.minimumNetCredit(1.5),
+    workingTime: nt.goodForMinutes(30),
+  }),
+});
+```
+
+`currentLimit()` creates a quote-relative Limit for dynamic rebalance strategies.
+It keeps the no-worse-than-current-quote protection, but it is not a resting
+price target. Live option strategies must choose an explicit Limit policy.
+
 <details>
 <summary><b>What you can build</b> — 170+ generated builders</summary>
 
