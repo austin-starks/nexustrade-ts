@@ -2262,11 +2262,27 @@ export const geneEntryCondition = (strategyIndex: number, values: { label: strin
   values: values as unknown[],
 });
 
+/** Sweep EntryCondition (Strategy scope), replacing the seed's gate rather than adding to it. */
+export const geneReplaceEntryCondition = (strategyIndex: number, values: { label: string; condition: Condition }[]): Gene => ({
+  field: "EntryCondition",
+  scope: "Strategy",
+  target: { scope: "Strategy", field: "EntryCondition", strategyIndex, replace: true },
+  values: values as unknown[],
+});
+
 /** Sweep ExitCondition (Strategy scope) over a value set. */
 export const geneExitCondition = (strategyIndex: number, values: { label: string; condition: Condition }[]): Gene => ({
   field: "ExitCondition",
   scope: "Strategy",
   target: { scope: "Strategy", field: "ExitCondition", strategyIndex },
+  values: values as unknown[],
+});
+
+/** Sweep ExitCondition (Strategy scope), replacing the seed's gate rather than adding to it. */
+export const geneReplaceExitCondition = (strategyIndex: number, values: { label: string; condition: Condition }[]): Gene => ({
+  field: "ExitCondition",
+  scope: "Strategy",
+  target: { scope: "Strategy", field: "ExitCondition", strategyIndex, replace: true },
   values: values as unknown[],
 });
 
