@@ -2051,7 +2051,7 @@ export interface BacktestConfig {
   endDate: string;
   /** Benchmark for comparisonValue (buy-and-hold of this ticker). Defaults to SPY if omitted — use SPY only for broad equity/market strategies. For single-name options, set to that underlying (AAPL options → AAPL). For multi-name options books, run separate backtests with each material underlying as baseline (AAPL for AAPL sleeve, MSFT for MSFT), or equal-weight B&H of the traded universe — do not default to SPY. */
   baselineSymbol?: string;
-  /** Time interval: Day or Minute (default Day). Minute is a daytrade tape — first-look 90 days, hard max 365 days. */
+  /** Time interval: Day or Minute (default Day). Minute is a daytrade tape. 365 days is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year is a normal second backtest, not an escalation. */
   interval?: "Day" | "Minute";
   /** Starting portfolio value (default 10000) Range 1..inf. */
   initialValue?: number;
@@ -2061,7 +2061,7 @@ export interface BacktestConfig {
   feeConfig?: FeeConfig;
 }
 export interface WalkForwardConfig {
-  /** Global calendar start for the walk-forward study (ISO date). Minute seed first-look is 90 days; each Minute evaluation window still cannot exceed 365 days. */
+  /** Global calendar start for the walk-forward study (ISO date). Each Minute evaluation window cannot exceed 365 days, which is the only cap; the 90-day seed first look is a default for callers who name no dates. */
   globalStartDate: string;
   /** Global calendar end for the walk-forward study (ISO date). */
   globalEndDate: string;
@@ -2125,7 +2125,7 @@ export interface WalkForwardConfig {
   genes?: Gene[];
 }
 export interface OptimizationConfig {
-  /** Optimization start date (ISO format, e.g. 2024-01-01). Minute interval inherits the backtest cap: first-look 90 days, hard max 365 days. */
+  /** Optimization start date (ISO format, e.g. 2024-01-01). Minute has ONE cap: 365 days. The 90-day first look is a default for callers who name no dates, not a ceiling — pass the window the question needs. */
   startDate: string;
   /** Optimization end date (ISO format, e.g. 2024-12-31). Minute selected range cannot exceed 365 days. */
   endDate: string;
