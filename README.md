@@ -325,6 +325,49 @@ await client.listPortfolios({ includePaper: true, includePositions: true });
 await client.getPortfolio(portfolioId);
 ```
 
+### Editing a saved portfolio
+
+`updatePortfolio` applies deterministic edits with no LLM in the path. The
+`operations` array is a typed union, so the compiler knows which fields each
+edit needs.
+
+```ts
+import type { PortfolioEditOperation } from "nexustrade";
+
+const operations: PortfolioEditOperation[] = [
+  { type: "rename", name: "AAPL Income" },
+  {
+    type: "replaceStrategy",
+    targetStrategyId: strategyId, // or targetStrategyName
+    strategyObject: nt.strategy(
+      "Buy AAPL",
+      nt.always(),
+      nt.buy(nt.stockAsset("AAPL"), 25, "percent of portfolio"),
+      {
+        orderExecution: nt.limitOrder({
+          price: nt.unitPriceLimit(150),
+          workingTime: nt.goodForDay(),
+        }),
+      },
+    ),
+  },
+];
+
+await client.updatePortfolio(portfolioId, operations, {
+  idempotencyKey: "aapl-limit-v1",
+});
+```
+
+The five edits are `rename`, `addStrategies`, `removeStrategies`,
+`replaceStrategy`, and `replaceStrategies`. Deploy, undeploy, delete,
+scheduling, and trading-policy operations are not reachable on this route.
+
+**`replaceStrategies` replaces the whole set**, so a strategy left out of the
+array is deleted. Carry unchanged strategies through verbatim, including the
+`orderExecution` each already has, or a working Limit silently reverts to
+Market. `removeStrategies` takes strategy ids from a fetched portfolio; removal
+by name is rejected.
+
 Fetched portfolio handles include a typed, read-only `policy` snapshot. Trading
 policy changes are intentionally unavailable through the SDK; edit them in
 Portfolio Settings. `PortfolioHandle.toJSON()` omits the snapshot so a fetched

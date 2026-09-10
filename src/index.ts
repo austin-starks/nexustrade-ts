@@ -10,6 +10,7 @@ export {
   waitForOperation,
 } from "./client.js";
 export type {
+  AddStrategiesOperation,
   BacktestCollateralStatistics,
   CustomIndicatorInput,
   CustomIndicatorPointInput,
@@ -18,6 +19,11 @@ export type {
   JsonValue,
   ListPortfoliosOptions,
   NexusTradeClientOptions,
+  PortfolioEditOperation,
+  PortfolioRenameOperation,
+  RemoveStrategiesOperation,
+  ReplaceStrategiesOperation,
+  ReplaceStrategyOperation,
   RequestOptions,
   Transport,
   UploadTransport,

@@ -6,9 +6,19 @@ import {
   NexusTradeApiError,
   NexusTradeClient,
   type JsonObject,
+  type PortfolioEditOperation,
   type RequestOptions,
   type Transport,
 } from "../src/client.ts";
+import {
+  always,
+  buy,
+  goodForDay,
+  limitOrder,
+  stockAsset,
+  strategy,
+  unitPriceLimit,
+} from "../src/generated/ntSdk.generated.ts";
 
 interface RecordedCall {
   method: string;
@@ -86,6 +96,56 @@ describe("NexusTradeClient", () => {
         idempotencyKey: "book-v1",
       },
     ]);
+  });
+
+  it("sends a typed replaceStrategy with its waiting Limit policy intact", async () => {
+    const transport = new FakeTransport([
+      { portfolio: { id: "p-9", name: "AAPL Income" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+    const operations: PortfolioEditOperation[] = [
+      {
+        type: "replaceStrategy",
+        targetStrategyId: "s-1",
+        strategyObject: strategy(
+          "Buy AAPL",
+          always(),
+          buy(stockAsset("AAPL"), 25, "percent of portfolio"),
+          {
+            orderExecution: limitOrder({
+              price: unitPriceLimit(150),
+              workingTime: goodForDay(),
+            }),
+          }
+        ),
+      },
+    ];
+
+    const edited = await client.updatePortfolio("p-9", operations, {
+      idempotencyKey: "limit-v1",
+    });
+
+    assert.equal(edited.id, "p-9");
+    assert.equal(transport.calls.length, 1);
+    assert.equal(transport.calls[0].path, "portfolios/p-9/operations");
+    const sent = (
+      transport.calls[0].body as unknown as {
+        operations: Array<{
+          type: string;
+          targetStrategyId: string;
+          strategyObject: { name: string; orderExecution: JsonObject };
+        }>;
+      }
+    ).operations;
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].type, "replaceStrategy");
+    assert.equal(sent[0].targetStrategyId, "s-1");
+    assert.equal(sent[0].strategyObject.name, "Buy AAPL");
+    assert.deepEqual(sent[0].strategyObject.orderExecution, {
+      type: "Limit",
+      price: { type: "UnitPrice", amount: 150 },
+      workingTime: { type: "Day" },
+    });
   });
 
   it("supports deterministic edit, public fork, and systematic sweep contracts", async () => {

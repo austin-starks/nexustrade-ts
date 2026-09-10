@@ -7,7 +7,7 @@
 
 import { AgentRun } from "./agent.ts";
 import { LazyDotenv, environmentValue } from "./env.ts";
-import type { JobRequest, Portfolio } from "./generated/ntSdk.generated.js";
+import type { JobRequest, Portfolio, Strategy } from "./generated/ntSdk.generated.js";
 import {
   PortfolioHandle,
   type DeployResult,
@@ -48,6 +48,78 @@ function asJsonObject(value: PortfolioInput | JobInput): JsonObject {
     }
   }
   return value as JsonObject;
+}
+
+/**
+ * One deterministic portfolio edit, as accepted by
+ * `POST /portfolios/:id/operations`. The book is addressed by the
+ * `updatePortfolio` argument, so an operation never carries a portfolio id of
+ * its own — the route stamps it and ignores one sent in the body.
+ *
+ * Strategy payloads are FINISHED objects in the shape `strategy()` emits,
+ * `orderExecution` included. The server ingests them deterministically, with no
+ * LLM in the path; natural-language strategy strings are rejected.
+ */
+export interface PortfolioRenameOperation {
+  type: "rename";
+  name: string;
+}
+
+/** Append strategies. Existing strategies and their open orders are untouched. */
+export interface AddStrategiesOperation {
+  type: "addStrategies";
+  strategyObjects: Strategy[];
+}
+
+/**
+ * Remove strategies by id, as returned on a fetched portfolio's `strategies`.
+ * Removal by name is not supported.
+ */
+export interface RemoveStrategiesOperation {
+  type: "removeStrategies";
+  strategyIds: string[];
+}
+
+/** Swap a single strategy. Exactly one of the two targets identifies it. */
+export type ReplaceStrategyOperation = {
+  type: "replaceStrategy";
+  strategyObject: Strategy;
+} & (
+  | { targetStrategyId: string; targetStrategyName?: never }
+  | { targetStrategyName: string; targetStrategyId?: never }
+);
+
+/**
+ * Replace the whole strategy set. The array REPLACES the book, so a strategy
+ * left out is deleted — carry unchanged strategies through verbatim, including
+ * the `orderExecution` each already has.
+ */
+export interface ReplaceStrategiesOperation {
+  type: "replaceStrategies";
+  strategyObjects: Strategy[];
+}
+
+/**
+ * The edits `updatePortfolio` accepts. Deploy, undeploy, delete, scheduling and
+ * trading-policy operations are deliberately absent: they are not reachable on
+ * this route, so typing them here would only compile a guaranteed 403.
+ */
+export type PortfolioEditOperation =
+  | PortfolioRenameOperation
+  | AddStrategiesOperation
+  | RemoveStrategiesOperation
+  | ReplaceStrategyOperation
+  | ReplaceStrategiesOperation;
+
+/**
+ * Boundary adapter, for the same reason `asJsonObject` exists: the operation
+ * members are `interface`s, which TypeScript denies the implicit index
+ * signature `JsonObject` requires. An operation is JSON by construction.
+ */
+function editOperationAsJsonObject(
+  operation: PortfolioEditOperation
+): JsonObject {
+  return { ...operation } as unknown as JsonObject;
 }
 
 export interface ListPortfoliosOptions {
@@ -1255,7 +1327,7 @@ export class NexusTradeClient {
    */
   async updatePortfolio(
     portfolioId: string,
-    operations: ReadonlyArray<JsonObject>,
+    operations: ReadonlyArray<PortfolioEditOperation>,
     options: { idempotencyKey: string }
   ): Promise<PortfolioHandle> {
     if (operations.length === 0) {
@@ -1265,7 +1337,7 @@ export class NexusTradeClient {
       "POST",
       `portfolios/${encodePathSegment(portfolioId)}/operations`,
       {
-        body: { operations: operations.map((operation) => ({ ...operation })) },
+        body: { operations: operations.map(editOperationAsJsonObject) },
         idempotencyKey: options.idempotencyKey,
       }
     );
