@@ -2237,6 +2237,12 @@ export const optimization = (
 
 // ---- generated sweep-gene builders ----
 export type SweepSortDirection = "Highest" | "Lowest";
+/**
+ * Which scalar inside an addressed condition node a parametric gene varies.
+ * "Lhs"/"Rhs" name the two indicators of a comparison; "Node" names the node's
+ * own number (a Then chain's window, a Multi's threshold).
+ */
+export type ConditionNodeSlot = "Lhs" | "Rhs" | "Node";
 /** One authored sweep gene. Opaque to callers — built via the gene* builders. */
 export interface Gene { field: string; scope: string; target: Record<string, unknown>; values: unknown[] }
 
@@ -2269,6 +2275,22 @@ export const geneEntryCooldownDays = (strategyIndex: number, values: number[]): 
   field: "EntryCooldownDays",
   scope: "Strategy",
   target: { scope: "Strategy", field: "EntryCooldownDays", strategyIndex },
+  values: values as unknown[],
+});
+
+/** Sweep ConditionWindowLength (Strategy scope) over a value set. */
+export const geneConditionWindowLength = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[]): Gene => ({
+  field: "ConditionWindowLength",
+  scope: "Strategy",
+  target: { scope: "Strategy", field: "ConditionWindowLength", strategyIndex, path, slot },
+  values: values as unknown[],
+});
+
+/** Sweep ConditionThreshold (Strategy scope) over a value set. */
+export const geneConditionThreshold = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[]): Gene => ({
+  field: "ConditionThreshold",
+  scope: "Strategy",
+  target: { scope: "Strategy", field: "ConditionThreshold", strategyIndex, path, slot },
   values: values as unknown[],
 });
 
