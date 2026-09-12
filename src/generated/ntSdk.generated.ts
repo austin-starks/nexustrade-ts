@@ -2045,13 +2045,13 @@ export interface JobRequest {
   args: Record<string, unknown>;
 }
 export interface BacktestConfig {
-  /** Backtest start date (ISO format, e.g. 2024-01-01). For interval=Minute, default first-look is the last 90 inclusive calendar days and the selected range cannot exceed 365 days. Do not use 2010-01-01 or a multi-year span on Minute. */
+  /** Backtest start date (ISO format, e.g. 2024-01-01). For interval=Minute, default first-look is the last 90 inclusive calendar days and the selected range plus minute-indicator warmup cannot exceed 730 days of minute data. Do not use 2010-01-01 on Minute. */
   startDate: string;
-  /** Backtest end date (ISO format, e.g. 2024-12-31). Minute hard max is 365 days from start_date; extend a survivor in a later run instead of splitting into yearly Minute jobs. */
+  /** Backtest end date (ISO format, e.g. 2024-12-31). Minute allows up to 730 days of minute data from start_date, counting minute-indicator warmup; never split a longer span into yearly Minute jobs. */
   endDate: string;
   /** Benchmark for comparisonValue (buy-and-hold of this ticker). Defaults to SPY if omitted — use SPY only for broad equity/market strategies. For single-name options, set to that underlying (AAPL options → AAPL). For multi-name options books, run separate backtests with each material underlying as baseline (AAPL for AAPL sleeve, MSFT for MSFT), or equal-weight B&H of the traded universe — do not default to SPY. */
   baselineSymbol?: string;
-  /** Time interval: Day or Minute (default Day). Minute is a daytrade tape. 365 days is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year is a normal second backtest, not an escalation. */
+  /** Time interval: Day or Minute (default Day). Minute is a daytrade tape. 730 days of minute data (selected range plus warmup) is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year or two is a normal second backtest, not an escalation. */
   interval?: "Day" | "Minute";
   /** Starting portfolio value (default 10000) Range 1..inf. */
   initialValue?: number;
@@ -2061,7 +2061,7 @@ export interface BacktestConfig {
   feeConfig?: FeeConfig;
 }
 export interface WalkForwardConfig {
-  /** Global calendar start for the walk-forward study (ISO date). Each Minute evaluation window cannot exceed 365 days, which is the only cap; the 90-day seed first look is a default for callers who name no dates. */
+  /** Global calendar start for the walk-forward study (ISO date). Each Minute evaluation window cannot exceed 730 days of minute data counting minute-indicator warmup, which is the only cap; the 90-day seed first look is a default for callers who name no dates. */
   globalStartDate: string;
   /** Global calendar end for the walk-forward study (ISO date). */
   globalEndDate: string;
@@ -2125,9 +2125,9 @@ export interface WalkForwardConfig {
   genes?: Gene[];
 }
 export interface OptimizationConfig {
-  /** Optimization start date (ISO format, e.g. 2024-01-01). Minute has ONE cap: 365 days. The 90-day first look is a default for callers who name no dates, not a ceiling — pass the window the question needs. */
+  /** Optimization start date (ISO format, e.g. 2024-01-01). Minute has ONE cap: 730 days of minute data, counting minute-indicator warmup. The 90-day first look is a default for callers who name no dates, not a ceiling — pass the window the question needs. */
   startDate: string;
-  /** Optimization end date (ISO format, e.g. 2024-12-31). Minute selected range cannot exceed 365 days. */
+  /** Optimization end date (ISO format, e.g. 2024-12-31). Minute selected range plus minute-indicator warmup cannot exceed 730 days of minute data. */
   endDate: string;
   /** Fitness functions: sharpeRatio, sortinoRatio, maxDrawdown, avgDrawdown, percentChange, dollarsSold, ulcerPerformanceIndex, participationRate, distinctUnderlyingsTraded, medianDeployment */
   fitnessFunctions?: ("sharpeRatio" | "sortinoRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment")[];
