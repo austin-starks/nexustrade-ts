@@ -358,7 +358,7 @@ export type SelectDirection = "Highest" | "Lowest";
 export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS";
 export type AllocationType = "percent of portfolio" | "percent of buying power" | "percent of current positions" | "dollars" | "number of assets";
 export type DepositWithdrawAllocationType = "percent of portfolio" | "percent of buying power" | "dollars";
-export type OptionAllocationType = "dollars" | "percent of portfolio" | "percent of buying power" | "contracts";
+export type OptionAllocationType = "dollars" | "percent of portfolio" | "percent of buying power" | "contracts" | "percent of realized premium";
 export type DeploymentBudgetType = "dollars" | "percent of portfolio";
 export type ExpirationPreference = "nearest" | "middle" | "furthest";
 export type StrikeDistanceType = "percent" | "dollars" | "delta";
@@ -1714,6 +1714,34 @@ export function OptionPositionValue(underlying: string, optionType: OptionType, 
   d["optionType"] = optionType;
   d["direction"] = direction;
   d["spreadType"] = spreadType;
+  return d as unknown as Indicator;
+}
+/**
+ * OptionRealizedPnL indicator.
+ * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
+ * @param optionType Filter by Call or Put. Leave empty for all.
+ * @param direction Filter by Long or Short. Leave empty for all.
+ * @param spreadType Filter by spread type. Leave empty for all.
+ * @param lookbackDays Only count activity within this many days of the evaluation date. Leave empty for the whole life of the book.
+ */
+export function OptionRealizedPnL(underlying: string, optionType: OptionType, direction: OptionDirection, spreadType: OptionSpreadType, lookbackDays?: number): Indicator {
+  const d: Record<string, unknown> = { type: "OptionRealizedPnL" };
+  d["underlying"] = underlying;
+  d["optionType"] = optionType;
+  d["direction"] = direction;
+  d["spreadType"] = spreadType;
+  if (lookbackDays !== undefined) d["lookbackDays"] = lookbackDays;
+  return d as unknown as Indicator;
+}
+/**
+ * OptionRealizedPremium indicator.
+ * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
+ * @param lookbackDays Only count activity within this many days of the evaluation date. Leave empty for the whole life of the book.
+ */
+export function OptionRealizedPremium(underlying: string, lookbackDays?: number): Indicator {
+  const d: Record<string, unknown> = { type: "OptionRealizedPremium" };
+  d["underlying"] = underlying;
+  if (lookbackDays !== undefined) d["lookbackDays"] = lookbackDays;
   return d as unknown as Indicator;
 }
 /**
