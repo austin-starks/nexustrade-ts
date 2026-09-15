@@ -323,8 +323,8 @@ export type StrategyLimitWorkingTime =
 export type StrategyLimitPricePolicy =
   | { type: "QuoteRelative"; reference: "Current" }
   | { type: "UnitPrice"; amount: number }
-  | { type: "MaximumNetDebit"; amount: number }
-  | { type: "MinimumNetCredit"; amount: number };
+  | { type: "MaximumNetDebit"; amount: number | Indicator }
+  | { type: "MinimumNetCredit"; amount: number | Indicator };
 export type StrategyOrderExecutionPolicy =
   | { type: "Market" }
   | {
@@ -794,12 +794,14 @@ export const unitPriceLimit = (amount: number): StrategyLimitPricePolicy => ({
   amount,
 });
 
-export const maximumNetDebit = (amount: number): StrategyLimitPricePolicy => ({
+/** Dollars per share, or an indicator evaluated when the strategy fires. */
+export const maximumNetDebit = (amount: number | Indicator): StrategyLimitPricePolicy => ({
   type: "MaximumNetDebit",
   amount,
 });
 
-export const minimumNetCredit = (amount: number): StrategyLimitPricePolicy => ({
+/** Dollars per share, or an indicator evaluated when the strategy fires. */
+export const minimumNetCredit = (amount: number | Indicator): StrategyLimitPricePolicy => ({
   type: "MinimumNetCredit",
   amount,
 });
@@ -1753,6 +1755,21 @@ export function OptionRealizedPremium(underlying: string, lookbackDays?: number)
  */
 export function OptionSpreadCount(underlying: string, optionType: OptionType, direction: OptionDirection, spreadType: OptionSpreadType): Indicator {
   const d: Record<string, unknown> = { type: "OptionSpreadCount" };
+  d["underlying"] = underlying;
+  d["optionType"] = optionType;
+  d["direction"] = direction;
+  d["spreadType"] = spreadType;
+  return d as unknown as Indicator;
+}
+/**
+ * OptionSpreadEntryPrice indicator.
+ * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
+ * @param optionType Filter by Call or Put. Leave empty for all.
+ * @param direction Filter by Long or Short. Leave empty for all.
+ * @param spreadType Filter by spread type. Leave empty for all.
+ */
+export function OptionSpreadEntryPrice(underlying: string, optionType: OptionType, direction: OptionDirection, spreadType: OptionSpreadType): Indicator {
+  const d: Record<string, unknown> = { type: "OptionSpreadEntryPrice" };
   d["underlying"] = underlying;
   d["optionType"] = optionType;
   d["direction"] = direction;

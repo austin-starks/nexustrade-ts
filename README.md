@@ -194,6 +194,21 @@ nt.strategy("Sell the spread for $1.50 or better", nt.always(), optionAction, {
 });
 ```
 
+An option net limit can also follow a position the strategy holds. Pass an
+indicator instead of a number and the engine evaluates it when the strategy
+fires. If it has no positive value at that moment, no order is placed:
+
+```ts
+nt.strategy("Sell the credit spread for the debit fill plus $0.50", whenDebitSpreadHeld, creditSpreadAction, {
+  orderExecution: nt.limitOrder({
+    price: nt.minimumNetCredit(
+      nt.Plus(nt.OptionSpreadEntryPrice("SPX", "call", "long", "vertical"), nt.Value(0.5)),
+    ),
+    workingTime: nt.goodForDay(),
+  }),
+});
+```
+
 `currentLimit()` creates a quote-relative Limit for dynamic rebalance strategies.
 It keeps the no-worse-than-current-quote protection, but it is not a resting
 price target. Live option strategies must choose an explicit Limit policy.
@@ -208,7 +223,7 @@ price target. Live option strategies must choose an explicit Limit policy.
 | **Position state**  | `PositionValue` `PositionPercentChange` `PositionMaxDrawdown`                                |
 | **Portfolio state** | `PortfolioValue` `BuyingPower` `MaxDrawdown` `InitialValue`                                  |
 | **Fundamentals**    | `Fundamental` `Economic` `DaysUntilEarnings` `IsIndexMember` `IsIndustry`                    |
-| **Options**         | `OptionDaysToExpiration` `OptionCollateral` `OptionUnrealizedPnL` `openOption` `closeOption` |
+| **Options**         | `OptionDaysToExpiration` `OptionCollateral` `OptionSpreadEntryPrice` `OptionUnrealizedPnL` `openOption` `closeOption` |
 | **Actions**         | `buy` `sell` `alert` `dynamicRebalance` `rebalanceOption`                                    |
 | **Selection**       | `filter` `selectTop` `selectPercentile` `universe`                                           |
 | **Logic**           | `always` `atLeast` `atMost` `exactly` `fewerThan` `multi` `and` `or` `sequence`              |
