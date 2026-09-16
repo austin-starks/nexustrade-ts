@@ -1312,6 +1312,21 @@ export function InitialValue(): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * InsiderTrades indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param metric Dollar value, shares, trade counts, or distinct buying insiders
+ * @param role Only trades by an officer, director, or 10% owner, or any insider
+ * @param windowDays Count trades whose filings became public within this many trailing days
+ */
+export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "DistinctBuyers" = "NetValue", role: "Any" | "Officer" | "Director" | "TenPercentOwner" = "Any", windowDays: number = 90): Indicator {
+  const d: Record<string, unknown> = { type: "InsiderTrades" };
+  setAsset(d, "targetAsset", asset);
+  d["metric"] = metric;
+  d["role"] = role;
+  d["windowDays"] = windowDays;
+  return d as unknown as Indicator;
+}
+/**
  * IsAsset indicator.
  * @param matchAsset The specific asset to compare against (ex. UPRO, GLD)
  * @param asset Ticker name (ex. SPY, BTC)
@@ -1797,6 +1812,23 @@ export function OptionUnrealizedPnL(underlying: string, optionType: OptionType, 
 export function Plus(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Plus" };
   d.indicators = [left, right];
+  return d as unknown as Indicator;
+}
+/**
+ * PoliticalTrades indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param filer Optional: a member's full or last name, such as Nancy Pelosi
+ * @param metric Disclosed dollars (amount range midpoints), trade counts, or distinct buying members
+ * @param chamber House, Senate, or both
+ * @param windowDays Count trades first disclosed within this many trailing days
+ */
+export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetDollars" | "BuyDollars" | "SellDollars" | "BuyCount" | "SellCount" | "DistinctBuyers" = "NetDollars", chamber: "All" | "House" | "Senate" = "All", windowDays: number = 90): Indicator {
+  const d: Record<string, unknown> = { type: "PoliticalTrades" };
+  setAsset(d, "targetAsset", asset);
+  d["filer"] = filer;
+  d["metric"] = metric;
+  d["chamber"] = chamber;
+  d["windowDays"] = windowDays;
   return d as unknown as Indicator;
 }
 /**
