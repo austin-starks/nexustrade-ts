@@ -35,8 +35,38 @@ jobs:
       - name: Validate metadata
         run: ./mcp-publisher validate
 
+      # The registry rejects a duplicate version, and a subtree mirror push can
+      # re-send server.json unchanged. Skip only when the live entry is identical.
+      - name: Check whether this version is already published
+        id: registry
+        run: |
+          name=$(jq -r .name server.json)
+          version=$(jq -r .version server.json)
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/$(jq -rn --arg v "$name" '$v|@uri')/versions/$(jq -rn --arg v "$version" '$v|@uri')"
+          status=$(curl --silent --show-error --output published.json --write-out '%{http_code}' "$url")
+          case "$status" in
+            404)
+              echo "published=false" >> "$GITHUB_OUTPUT"
+              ;;
+            200)
+              if diff -u <(jq -S .server published.json) <(jq -S . server.json); then
+                echo "$name $version is already published with identical metadata."
+                echo "published=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "::error::$name $version is already published with different metadata. Bump version in server.json."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Registry lookup for $name $version returned HTTP $status."
+              exit 1
+              ;;
+          esac
+
       - name: Authenticate with GitHub OIDC
+        if: steps.registry.outputs.published == 'false'
         run: ./mcp-publisher login github-oidc
 
       - name: Publish NexusTrade
+        if: steps.registry.outputs.published == 'false'
         run: ./mcp-publisher publish
