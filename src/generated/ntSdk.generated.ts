@@ -1824,19 +1824,23 @@ export function Plus(left: Indicator, right: Indicator): Indicator {
 }
 /**
  * PoliticalTrades indicator.
- * @param asset Ticker name (ex. SPY, BTC)
- * @param filer Optional: a member's full or last name, such as Nancy Pelosi
- * @param metric Disclosed dollars (amount range midpoints), trade counts, or distinct buying members
- * @param chamber House, Senate, or both
- * @param windowDays Count trades first disclosed within this many trailing days
+ * @param asset Pass CANDIDATE inside a rebalance pipeline to bind each stock.
+ * @param filer Member full or last name. Pass an empty string for all members.
+ * @param metric Amount-range aggregate, event count, or distinct purchasing members.
+ * @param windowDays Trailing calendar days measured from when each event became public.
+ * @param amountBasis Range endpoint used by amount metrics; LowerBound is conservative.
+ * @param instrument Equity excludes confirmed option disclosures; Option selects them explicitly.
+ * @param chamber Optional advanced cohort filter; named-member requests should normally use All.
  */
-export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetDollars" | "BuyDollars" | "SellDollars" | "BuyCount" | "SellCount" | "DistinctBuyers" = "NetDollars", chamber: "All" | "House" | "Senate" = "All", windowDays: number = 90): Indicator {
+export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmount" | "BuyAmount" | "SellAmount" | "BuyCount" | "SellCount" | "DistinctBuyers" = "BuyAmount", windowDays: number = 90, amountBasis: "LowerBound" | "Midpoint" | "UpperBound" = "LowerBound", instrument: "Equity" | "Option" | "All" = "Equity", chamber: "All" | "House" | "Senate" = "All"): Indicator {
   const d: Record<string, unknown> = { type: "PoliticalTrades" };
   setAsset(d, "targetAsset", asset);
   d["filer"] = filer;
   d["metric"] = metric;
-  d["chamber"] = chamber;
   d["windowDays"] = windowDays;
+  d["amountBasis"] = amountBasis;
+  d["instrument"] = instrument;
+  d["chamber"] = chamber;
   return d as unknown as Indicator;
 }
 /**
