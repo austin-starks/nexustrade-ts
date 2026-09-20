@@ -252,6 +252,13 @@ export interface DynamicRebalanceAction {
    * indicator values fail closed (retain). deploymentPercent: 0 overrides.
    */
   canSell?: Condition | CandidateCondition;
+  /**
+   * BACKTEST-ONLY. Permits negative rebalance targets (equity short legs).
+   * The backtest assumes shares were available to short each morning and
+   * accrues a modeled borrow fee. Live/paper deploy of a short strategy is
+   * rejected at deploy time (explicit non-parity with backtest).
+   */
+  allowShorts?: boolean;
   allocationPolicy?: AllocationPolicy;
   exposurePolicy?: ExposurePolicy;
 }
@@ -651,6 +658,7 @@ export const dynamicRebalance = (config: {
   universe: Universe; pipeline: PipelineStage[]; weightIndicator: Indicator | CandidateIndicator;
   limit?: number; deploymentPercent?: number; perNameAllocation?: PerNameAllocation;
   canSell?: Condition | CandidateCondition;
+  allowShorts?: boolean;
   allocationPolicy?: AllocationPolicy;
   exposurePolicy?: ExposurePolicy;
 }): DynamicRebalanceAction => compact({ type: "DynamicRebalance", ...config }) as DynamicRebalanceAction;
