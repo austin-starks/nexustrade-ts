@@ -880,6 +880,17 @@ export function AbsoluteValue(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * AccumulationDistribution indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param interval Bar interval the line is accumulated on
+ */
+export function AccumulationDistribution(asset: AssetArg, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "AccumulationDistribution" };
+  setAsset(d, "targetAsset", asset);
+  d["interval"] = interval;
+  return d as unknown as Indicator;
+}
+/**
  * AverageDirectionalIndex indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
@@ -943,6 +954,32 @@ export function BullishFairValueGap(asset: AssetArg): Indicator {
  */
 export function BuyingPower(): Indicator {
   const d: Record<string, unknown> = { type: "BuyingPower" };
+  return d as unknown as Indicator;
+}
+/**
+ * ChaikinMoneyFlow indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "ChaikinMoneyFlow" };
+  setAsset(d, "targetAsset", asset);
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
+ * CommodityChannelIndex indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ * @param constant Divisor scaling the mean deviation
+ */
+export function CommodityChannelIndex(asset: AssetArg, length: number = 20, interval: Interval = "Day", constant: number = 0.015): Indicator {
+  const d: Record<string, unknown> = { type: "CommodityChannelIndex" };
+  setAsset(d, "targetAsset", asset);
+  d["constant"] = constant;
+  d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
 /**
@@ -1147,6 +1184,20 @@ export function Divide(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * DonchianChannel indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ * @param line Which Donchian line to evaluate
+ */
+export function DonchianChannel(asset: AssetArg, length: number = 20, interval: Interval = "Day", line: "upper" | "lower" | "middle" = "upper"): Indicator {
+  const d: Record<string, unknown> = { type: "DonchianChannel" };
+  setAsset(d, "targetAsset", asset);
+  d["line"] = line;
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * Economic indicator.
  * @param metric The economic indicator to use
  */
@@ -1214,6 +1265,22 @@ export function GapSize(asset: AssetArg): Indicator {
 export function HighOfDay(asset: AssetArg): Indicator {
   const d: Record<string, unknown> = { type: "HighOfDay" };
   setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * IchimokuCloud indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ * @param spanLength Senkou B lookback in bars (Kijun scales from conversion)
+ * @param line Which Ichimoku line to evaluate (unshifted)
+ */
+export function IchimokuCloud(asset: AssetArg, length: number = 9, interval: Interval = "Day", spanLength: number = 52, line: "tenkan" | "kijun" | "senkouA" | "senkouB" | "chikou" = "tenkan"): Indicator {
+  const d: Record<string, unknown> = { type: "IchimokuCloud" };
+  setAsset(d, "targetAsset", asset);
+  d["spanLength"] = spanLength;
+  d["line"] = line;
+  d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
 /**
@@ -1439,6 +1506,22 @@ export function IVRank(asset: AssetArg, length: number = 252, interval: Interval
   return d as unknown as Indicator;
 }
 /**
+ * KeltnerChannel indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ * @param multiplier How many ATRs from the EMA midline
+ * @param line Which Keltner line to evaluate
+ */
+export function KeltnerChannel(asset: AssetArg, length: number = 20, interval: Interval = "Day", multiplier: number = 2, line: "upper" | "middle" | "lower" = "middle"): Indicator {
+  const d: Record<string, unknown> = { type: "KeltnerChannel" };
+  setAsset(d, "targetAsset", asset);
+  d["multiplier"] = multiplier;
+  d["line"] = line;
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * LastOrderPrice indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param side Matches order events with this side (buy or sell)
@@ -1608,6 +1691,18 @@ export function MinutesUntilClose(): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * MoneyFlowIndex indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function MoneyFlowIndex(asset: AssetArg, length: number = 14, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "MoneyFlowIndex" };
+  setAsset(d, "targetAsset", asset);
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * Month indicator.
  */
 export function Month(): Indicator {
@@ -1647,6 +1742,17 @@ export function Multiply(left: Indicator, right: Indicator): Indicator {
 export function Negative(operand: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Negative" };
   d.indicators = [operand];
+  return d as unknown as Indicator;
+}
+/**
+ * OnBalanceVolume indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param interval Bar interval the volume is accumulated on
+ */
+export function OnBalanceVolume(asset: AssetArg, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "OnBalanceVolume" };
+  setAsset(d, "targetAsset", asset);
+  d["interval"] = interval;
   return d as unknown as Indicator;
 }
 /**
@@ -1848,6 +1954,21 @@ export function OptionUnrealizedPnL(underlying: string, optionType: OptionType, 
   return d as unknown as Indicator;
 }
 /**
+ * ParabolicSar indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param interval Bar interval the SAR trails on
+ * @param step AF increment per new extreme
+ * @param maximum AF cap
+ */
+export function ParabolicSar(asset: AssetArg, interval: Interval = "Day", step: number = 0.02, maximum: number = 0.2): Indicator {
+  const d: Record<string, unknown> = { type: "ParabolicSar" };
+  setAsset(d, "targetAsset", asset);
+  d["interval"] = interval;
+  d["step"] = step;
+  d["maximum"] = maximum;
+  return d as unknown as Indicator;
+}
+/**
  * Plus indicator.
  */
 export function Plus(left: Indicator, right: Indicator): Indicator {
@@ -2039,6 +2160,24 @@ export function SquareRoot(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * Stochastic indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ * @param smoothK Moving-average length applied to raw %K
+ * @param smoothD Moving-average length applied to smoothed %K
+ * @param line Which stochastic line to evaluate
+ */
+export function Stochastic(asset: AssetArg, length: number = 14, interval: Interval = "Day", smoothK: number = 3, smoothD: number = 3, line: "k" | "d" = "k"): Indicator {
+  const d: Record<string, unknown> = { type: "Stochastic" };
+  setAsset(d, "targetAsset", asset);
+  d["smoothK"] = smoothK;
+  d["smoothD"] = smoothD;
+  d["line"] = line;
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * StockReport indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  */
@@ -2076,6 +2215,22 @@ export function SumOrderQuantity(side: Side, orderStatus: OrderStatus = "Filled"
   d["side"] = side;
   d["orderStatus"] = orderStatus;
   setAssets(d, "targetAssets", assets);
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
+ * Supertrend indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ * @param multiplier How many ATRs from HL2
+ * @param line Band value or trend direction (+1 up, -1 down)
+ */
+export function Supertrend(asset: AssetArg, length: number = 10, interval: Interval = "Day", multiplier: number = 3, line: "value" | "direction" = "value"): Indicator {
+  const d: Record<string, unknown> = { type: "Supertrend" };
+  setAsset(d, "targetAsset", asset);
+  d["multiplier"] = multiplier;
+  d["line"] = line;
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
@@ -2134,6 +2289,18 @@ export function Volume(asset: AssetArg, metric: FundamentalMetric = "volume"): I
 export function VWAP(asset: AssetArg): Indicator {
   const d: Record<string, unknown> = { type: "VWAP" };
   setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * WilliamsR indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function WilliamsR(asset: AssetArg, length: number = 14, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "WilliamsR" };
+  setAsset(d, "targetAsset", asset);
+  d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
 /**
