@@ -880,6 +880,20 @@ export function AbsoluteValue(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * AverageDirectionalIndex indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ * @param line Which ADX-system line to evaluate
+ */
+export function AverageDirectionalIndex(asset: AssetArg, length: number = 14, interval: Interval = "Day", line: "adx" | "plusDi" | "minusDi" = "adx"): Indicator {
+  const d: Record<string, unknown> = { type: "AverageDirectionalIndex" };
+  setAsset(d, "targetAsset", asset);
+  d["line"] = line;
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * AverageTrueRange indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
@@ -1601,6 +1615,25 @@ export function Month(): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * MovingAverageConvergenceDivergence indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param fastLength Period of the fast EMA
+ * @param slowLength Period of the slow EMA (must exceed the fast length)
+ * @param signalLength Period of the EMA applied to the MACD line
+ * @param interval Bar interval the MACD is computed on
+ * @param line Which MACD line to evaluate
+ */
+export function MovingAverageConvergenceDivergence(asset: AssetArg, fastLength: number = 12, slowLength: number = 26, signalLength: number = 9, interval: Interval = "Day", line: "macd" | "signal" | "histogram" = "macd"): Indicator {
+  const d: Record<string, unknown> = { type: "MovingAverageConvergenceDivergence" };
+  setAsset(d, "targetAsset", asset);
+  d["fastLength"] = fastLength;
+  d["slowLength"] = slowLength;
+  d["signalLength"] = signalLength;
+  d["interval"] = interval;
+  d["line"] = line;
+  return d as unknown as Indicator;
+}
+/**
  * Multiply indicator.
  */
 export function Multiply(left: Indicator, right: Indicator): Indicator {
@@ -1972,6 +2005,18 @@ export function RelativeStrengthIndex(asset: AssetArg, length: number = 30, inte
   return d as unknown as Indicator;
 }
 export const RSI = RelativeStrengthIndex;
+/**
+ * RelativeVolume indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function RelativeVolume(asset: AssetArg, length: number = 14, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "RelativeVolume" };
+  setAsset(d, "targetAsset", asset);
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
 /**
  * SimpleMovingAverage indicator.
  * @param asset Ticker name (ex. SPY, BTC)
