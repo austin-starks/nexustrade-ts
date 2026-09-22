@@ -2312,7 +2312,7 @@ export function Year(): Indicator {
 }
 
 // ---- generated job builders ----
-export type FitnessFunction = "sharpeRatio" | "sortinoRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment";
+export type FitnessFunction = "sharpeRatio" | "sortinoRatio" | "winRate" | "profitFactor" | "calmarRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment";
 export interface FeeAmount { amount: number; type: "percent" | "dollars" }
 /** Fee contract keyed by asset class. Omit for shared defaults (Option $0.65/contract). */
 export interface FeeConfig {
@@ -2388,7 +2388,7 @@ export interface WalkForwardConfig {
   trainingPercent?: number;
   /** Inner rolling window overlap percent (default 50). Range 0..95. */
   windowOverlapPercent?: number;
-  fitnessFunctions?: ("sharpeRatio" | "sortinoRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment")[];
+  fitnessFunctions?: ("sharpeRatio" | "sortinoRatio" | "winRate" | "profitFactor" | "calmarRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment")[];
   /** Winner selection policy (objectives, constraints, tieBreakers). Applies to sweep leaderboard and fold winner selection. For GA WF, also sets NSGA-II activity constraints when fold_selection_policy is omitted. */
   selectionPolicy?: SelectionPolicy;
   /** Explicit fold winner selection policy. Overrides selection_policy for fold winner pick. When set, train→validation degradation penalty defaults to 0.5 unless degradation_penalty is set. */
@@ -2430,8 +2430,8 @@ export interface OptimizationConfig {
   startDate: string;
   /** Optimization end date (ISO format, e.g. 2024-12-31). Minute selected range plus minute-indicator warmup cannot exceed 730 days of minute data. */
   endDate: string;
-  /** Fitness functions: sharpeRatio, sortinoRatio, maxDrawdown, avgDrawdown, percentChange, dollarsSold, ulcerPerformanceIndex, participationRate, distinctUnderlyingsTraded, medianDeployment */
-  fitnessFunctions?: ("sharpeRatio" | "sortinoRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment")[];
+  /** Fitness functions: sharpeRatio, sortinoRatio, winRate, profitFactor, calmarRatio, maxDrawdown, avgDrawdown, percentChange, dollarsSold, ulcerPerformanceIndex, participationRate, distinctUnderlyingsTraded, medianDeployment */
+  fitnessFunctions?: ("sharpeRatio" | "sortinoRatio" | "winRate" | "profitFactor" | "calmarRatio" | "maxDrawdown" | "avgDrawdown" | "percentChange" | "dollarsSold" | "ulcerPerformanceIndex" | "participationRate" | "distinctUnderlyingsTraded" | "medianDeployment")[];
   /** Population size for genetic algorithm (default 6, range 3-12) Range 3..12. */
   populationSize?: number;
   /** Number of generations (default 6, max 10) Range 1..10. */
