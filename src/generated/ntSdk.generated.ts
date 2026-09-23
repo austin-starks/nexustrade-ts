@@ -1008,6 +1008,18 @@ export function ConsecutiveTrue(condition: Condition, length: number = 1, interv
   return d as unknown as Indicator;
 }
 /**
+ * Correlation indicator.
+ * @param operands Sub-indicators this compound operates on.
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function Correlation(operands: Indicator[], length: number = 60, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "Correlation" };
+  d.indicators = operands;
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * CountTrue indicator.
  * @param condition Condition evaluated over the window.
  * @param length Length of time
