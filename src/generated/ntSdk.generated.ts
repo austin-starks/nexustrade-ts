@@ -1428,6 +1428,19 @@ export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" |
   return d as unknown as Indicator;
 }
 /**
+ * InstitutionalHoldings indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param metric Managers holding, shares or value held, concentration, or the change since the previous quarter
+ * @param windowDays Read a disclosed period only if its filing became public within this many trailing days
+ */
+export function InstitutionalHoldings(asset: AssetArg, metric: "HolderCount" | "TotalShares" | "TotalValue" | "ConcentrationTop5" | "NetShareChange" | "NetHolderChange" | "NewHolders" | "ClosedHolders" = "HolderCount", windowDays: number = 90): Indicator {
+  const d: Record<string, unknown> = { type: "InstitutionalHoldings" };
+  setAsset(d, "targetAsset", asset);
+  d["metric"] = metric;
+  d["windowDays"] = windowDays;
+  return d as unknown as Indicator;
+}
+/**
  * IsAsset indicator.
  * @param matchAsset The specific asset to compare against (ex. UPRO, GLD)
  * @param asset Ticker name (ex. SPY, BTC)
