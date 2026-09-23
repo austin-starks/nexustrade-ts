@@ -1430,12 +1430,14 @@ export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" |
 /**
  * InstitutionalHoldings indicator.
  * @param asset Ticker name (ex. SPY, BTC)
+ * @param manager Optional: a CIK such as 1067983, or part of a manager's name such as Renaissance Technologies. Leave empty for every manager. A CIK is exact; a name can match several firms
  * @param metric Managers holding, shares or value held, concentration, or the change since the previous quarter
  * @param windowDays Read a disclosed period only if its filing became public within this many trailing days
  */
-export function InstitutionalHoldings(asset: AssetArg, metric: "HolderCount" | "TotalShares" | "TotalValue" | "ConcentrationTop5" | "NetShareChange" | "NetHolderChange" | "NewHolders" | "ClosedHolders" = "HolderCount", windowDays: number = 90): Indicator {
+export function InstitutionalHoldings(asset: AssetArg, manager: string, metric: "HolderCount" | "TotalShares" | "TotalValue" | "ConcentrationTop5" | "NetShareChange" | "NetHolderChange" | "NewHolders" | "ClosedHolders" = "HolderCount", windowDays: number = 180): Indicator {
   const d: Record<string, unknown> = { type: "InstitutionalHoldings" };
   setAsset(d, "targetAsset", asset);
+  d["manager"] = manager;
   d["metric"] = metric;
   d["windowDays"] = windowDays;
   return d as unknown as Indicator;
