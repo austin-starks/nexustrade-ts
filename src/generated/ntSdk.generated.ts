@@ -351,11 +351,33 @@ export interface Strategy {
   /** Omitted means Market. Limit always requires an explicit price policy. */
   orderExecution?: StrategyOrderExecutionPolicy;
 }
+export interface AuthoredIndustryFilter {
+  mode: "ALL" | "INCLUDE_ONLY"; match: "ANY" | "ALL"; industries: readonly string[];
+}
+/**
+ * Which stocks the portfolio's dynamic universes may select. Omitted fields keep
+ * the default: minimumMarketCapUsd 1_000_000_000, no maximum, every industry,
+ * missing caps EXCLUDE, one share class per company.
+ */
+export interface AuthoredStockEligibility {
+  minimumMarketCapUsd?: number;
+  maximumMarketCapUsd?: number | null;
+  industryFilter?: AuthoredIndustryFilter;
+  /** INCLUDE keeps names with no known market cap (most ETFs). */
+  missingMarketCapBehavior?: "EXCLUDE" | "INCLUDE";
+  /** ALL_CLASSES lets a pairs book hold both GOOG and GOOGL. */
+  shareClassBehavior?: "ONE_PER_COMPANY" | "ALL_CLASSES";
+}
+/** Automated trading is never authored: only the owner enables it, in the NexusTrade UI. */
+export interface AuthoredPortfolioPolicy {
+  stockEligibility: AuthoredStockEligibility;
+}
 export interface Portfolio {
   name: string; initialValue?: number; cash?: number; buyingPower?: number;
   strategies: Strategy[];
   main?: boolean; supportsFractionalShares?: boolean; supportsCrypto?: boolean;
   alertsEnabled?: boolean;
+  policy?: AuthoredPortfolioPolicy;
 }
 
 export type AssetType = "Stock" | "Cryptocurrency" | "Option" | "Other";
@@ -857,6 +879,7 @@ export const portfolio = (
   options: {
     initialValue?: number; main?: boolean;
     supportsFractionalShares?: boolean; supportsCrypto?: boolean; alertsEnabled?: boolean;
+    policy?: AuthoredPortfolioPolicy;
   } = {},
 ): PortfolioHandle => {
   const initialValue = options.initialValue ?? 10000;
@@ -1650,6 +1673,24 @@ export function MinimumPrice(asset: AssetArg, length: number = 30, interval: Int
 export function Minus(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Minus" };
   d.indicators = [left, right];
+  return d as unknown as Indicator;
+}
+/**
+ * MinuteBarHigh indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function MinuteBarHigh(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "MinuteBarHigh" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * MinuteBarLow indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function MinuteBarLow(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "MinuteBarLow" };
+  setAsset(d, "targetAsset", asset);
   return d as unknown as Indicator;
 }
 /**

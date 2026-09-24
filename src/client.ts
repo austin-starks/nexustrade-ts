@@ -918,7 +918,7 @@ export interface CustomIndicatorInput {
   description?: string;
   scope?: "global" | "asset";
   pointKind?: "observation" | "period_aggregate" | "disclosed";
-  aggregatePeriod?: "1d" | "1w" | "1mo" | "1q";
+  aggregatePeriod?: "1min" | "1d" | "1w" | "1mo" | "1q";
   points?: ReadonlyArray<CustomIndicatorPointInput>;
 }
 
@@ -1057,6 +1057,34 @@ function pointKindPoints(
       }
       if (availableDay) {
         row.availableAt = utcMidnight(addUtcDays(availableDay, 1));
+      }
+      return row;
+    }
+    if (aggregatePeriod === "1min") {
+      // One completed bar: timestamp is the bar open, available at bar close.
+      if (
+        eventDay ||
+        !eventTime ||
+        eventTime.getUTCSeconds() !== 0 ||
+        eventTime.getUTCMilliseconds() !== 0
+      ) {
+        throw new Error(
+          `Point ${index + 1}: 1min timestamp must be the bar-open instant with an explicit UTC offset and no seconds.`
+        );
+      }
+      const barClose = new Date(eventTime.getTime() + 60_000);
+      if (row.availableAt === undefined) {
+        row.availableAt = barClose.toISOString();
+      } else {
+        const explicit = availableDay ? addUtcDays(availableDay, 1) : availableTime;
+        if (!explicit || explicit.getTime() < barClose.getTime()) {
+          throw new Error(
+            `Point ${index + 1}: availableAt precedes the 1min bar close.`
+          );
+        }
+        if (availableDay) {
+          row.availableAt = utcMidnight(explicit);
+        }
       }
       return row;
     }

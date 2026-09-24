@@ -16,6 +16,8 @@ import {
   type Transport,
 } from "./client.ts";
 import type {
+  AuthoredPortfolioPolicy,
+  AuthoredStockEligibility,
   Portfolio,
   Strategy,
 } from "./generated/ntSdk.generated.js";
@@ -64,6 +66,8 @@ export interface ReadonlyPortfolioPolicy {
     };
     /** INCLUDE keeps names with no known market cap (ETFs, unsized filers); the politician copy bots use it. */
     readonly missingMarketCapBehavior: "EXCLUDE" | "INCLUDE";
+    /** ONE_PER_COMPANY keeps one share class per company in a selection; ALL_CLASSES allows pairs such as GOOG/GOOGL. */
+    readonly shareClassBehavior: "ONE_PER_COMPANY" | "ALL_CLASSES";
     readonly missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET";
     readonly appliesTo: "DYNAMIC_STOCK_UNIVERSES";
   };
@@ -109,6 +113,8 @@ function isReadonlyPortfolioPolicy(
     isStringArray(industry.industries) &&
     (stock.missingMarketCapBehavior === "EXCLUDE" ||
       stock.missingMarketCapBehavior === "INCLUDE") &&
+    (stock.shareClassBehavior === "ONE_PER_COMPANY" ||
+      stock.shareClassBehavior === "ALL_CLASSES") &&
     stock.missingIndustryBehavior === "EXCLUDE_WHEN_FILTER_SET" &&
     stock.appliesTo === "DYNAMIC_STOCK_UNIVERSES" &&
     typeof automation.enabled === "boolean" &&
@@ -120,6 +126,46 @@ function isReadonlyPortfolioPolicy(
     automation.dailyWindow === "AMERICA_NEW_YORK_CALENDAR_DAY" &&
     (value.updatedAt === undefined || typeof value.updatedAt === "string")
   );
+}
+
+const AUTOMATION_POLICY_KEYS = ["automatedApproval", "automationAcknowledged"];
+
+/**
+ * An authored policy carries stock eligibility and nothing else. Automated
+ * trading is enabled only by the owner in the NexusTrade UI, so a policy that
+ * names it is refused here rather than sent.
+ */
+function parseAuthoredPolicy(value: JsonObject): AuthoredPortfolioPolicy {
+  if (AUTOMATION_POLICY_KEYS.some((key) => key in value)) {
+    throw new TypeError(
+      "Automated trading can only be changed by the portfolio owner in the NexusTrade UI; " +
+        "an authored policy may set only stockEligibility.",
+    );
+  }
+  const unknownKeys = Object.keys(value).filter((key) => key !== "stockEligibility");
+  if (unknownKeys.length || !isJsonObject(value.stockEligibility)) {
+    throw new TypeError(
+      "An authored policy must be { stockEligibility: {...} } and nothing else.",
+    );
+  }
+  return { stockEligibility: value.stockEligibility as AuthoredStockEligibility };
+}
+
+/** The authorable fields of a fetched policy's eligibility, for a copy. */
+function authorableEligibility(
+  stock: ReadonlyPortfolioPolicy["stockEligibility"],
+): AuthoredStockEligibility {
+  return {
+    minimumMarketCapUsd: stock.minimumMarketCapUsd,
+    maximumMarketCapUsd: stock.maximumMarketCapUsd,
+    industryFilter: {
+      mode: stock.industryFilter.mode,
+      match: stock.industryFilter.match,
+      industries: [...stock.industryFilter.industries],
+    },
+    missingMarketCapBehavior: stock.missingMarketCapBehavior,
+    shareClassBehavior: stock.shareClassBehavior,
+  };
 }
 
 function encodePathSegment(value: string): string {
@@ -146,11 +192,28 @@ export class PortfolioHandle implements Portfolio {
   createdAt?: string;
   updatedAt?: string;
   brokerage?: string;
-  /** Server-owned snapshot. It is intentionally omitted from authoring payloads. */
+  /** Server snapshot of a fetched portfolio. Only its stock eligibility is ever sent back. */
   #policy?: ReadonlyPortfolioPolicy;
+  #authoredPolicy?: AuthoredPortfolioPolicy;
 
   get policy(): ReadonlyPortfolioPolicy | undefined {
     return this.#policy;
+  }
+
+  /** Stock eligibility this handle will submit; automated trading is never submitted. */
+  get authoredPolicy(): AuthoredPortfolioPolicy | undefined {
+    if (this.#authoredPolicy) return this.#authoredPolicy;
+    return this.#policy
+      ? { stockEligibility: authorableEligibility(this.#policy.stockEligibility) }
+      : undefined;
+  }
+
+  /** Replace the authored stock eligibility. Omitted fields take the server defaults. */
+  setStockEligibility(stockEligibility: AuthoredStockEligibility): this {
+    this.#authoredPolicy = parseAuthoredPolicy({
+      stockEligibility: stockEligibility as unknown as JsonObject,
+    });
+    return this;
   }
 
   #transport: Transport | null;
@@ -203,6 +266,8 @@ export class PortfolioHandle implements Portfolio {
     if (typeof record.brokerage === "string") this.brokerage = record.brokerage;
     if (isReadonlyPortfolioPolicy(record.policy)) {
       this.#policy = record.policy;
+    } else if (isJsonObject(record.policy)) {
+      this.#authoredPolicy = parseAuthoredPolicy(record.policy);
     }
 
     for (const [key, value] of Object.entries(record)) {
@@ -272,6 +337,8 @@ export class PortfolioHandle implements Portfolio {
     if (this.createdAt !== undefined) body.createdAt = this.createdAt;
     if (this.updatedAt !== undefined) body.updatedAt = this.updatedAt;
     if (this.brokerage !== undefined) body.brokerage = this.brokerage;
+    const authored = this.authoredPolicy;
+    if (authored) body.policy = authored as unknown as JsonObject;
     return body;
   }
 

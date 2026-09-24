@@ -68,7 +68,7 @@ describe("PortfolioHandle", () => {
     assert.equal(transport.calls[0]?.body?.id, undefined);
   });
 
-  it("exposes a fetched policy without returning it in authoring JSON", () => {
+  it("sends a fetched policy's stock eligibility and never its automation", () => {
     const policy = {
       schemaVersion: 2,
       revision: 4,
@@ -81,6 +81,7 @@ describe("PortfolioHandle", () => {
           industries: ["artificialIntelligence", "biotechnology"],
         },
         missingMarketCapBehavior: "EXCLUDE",
+        shareClassBehavior: "ONE_PER_COMPANY",
         missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
         appliesTo: "DYNAMIC_STOCK_UNIVERSES",
       },
@@ -98,8 +99,61 @@ describe("PortfolioHandle", () => {
     });
 
     assert.deepEqual(book.policy, policy);
-    assert.equal(book.toJSON().policy, undefined);
+    assert.deepEqual(book.toJSON().policy, {
+      stockEligibility: {
+        minimumMarketCapUsd: 500_000_000,
+        maximumMarketCapUsd: null,
+        industryFilter: {
+          mode: "INCLUDE_ONLY",
+          match: "ALL",
+          industries: ["artificialIntelligence", "biotechnology"],
+        },
+        missingMarketCapBehavior: "EXCLUDE",
+        shareClassBehavior: "ONE_PER_COMPANY",
+      },
+    });
   });
+
+  it("authors a pairs book's eligibility through portfolio() and save()", async () => {
+    const transport = new FakeTransport([
+      { portfolio: { portfolioId: "chat-9", portfolioName: "GOOG/GOOGL pair" } },
+    ]);
+    const book = portfolio("GOOG/GOOGL pair", [], {
+      policy: { stockEligibility: { shareClassBehavior: "ALL_CLASSES", minimumMarketCapUsd: 0 } },
+    });
+
+    await book.save({ idempotencyKey: "pair-v1", transport });
+
+    assert.deepEqual(transport.calls[0]?.body?.policy, {
+      stockEligibility: { shareClassBehavior: "ALL_CLASSES", minimumMarketCapUsd: 0 },
+    });
+    assert.equal(book.policy, undefined);
+  });
+
+  it("setStockEligibility replaces the authored eligibility", () => {
+    const book = new PortfolioHandle({ name: "Small caps", strategies: [] });
+    assert.equal(book.toJSON().policy, undefined);
+
+    book.setStockEligibility({ minimumMarketCapUsd: 300_000_000, maximumMarketCapUsd: 2_000_000_000 });
+
+    assert.deepEqual(book.toJSON().policy, {
+      stockEligibility: { minimumMarketCapUsd: 300_000_000, maximumMarketCapUsd: 2_000_000_000 },
+    });
+  });
+
+  for (const policy of [
+    { automatedApproval: { enabled: true } },
+    { stockEligibility: { minimumMarketCapUsd: 0 }, automatedApproval: { enabled: true } },
+    { stockEligibility: { minimumMarketCapUsd: 0 }, automationAcknowledged: true },
+    { stockEligibility: {}, revision: 3 },
+  ]) {
+    it(`refuses to author ${JSON.stringify(policy)}`, () => {
+      assert.throws(
+        () => new PortfolioHandle({ name: "Book", strategies: [], policy } as unknown as JsonObject),
+        TypeError,
+      );
+    });
+  }
 
   it("reads a policy that keeps names with no market cap", () => {
     // The politician copy bots: no floor, and ETFs and unsized filers kept.
@@ -111,6 +165,7 @@ describe("PortfolioHandle", () => {
         maximumMarketCapUsd: null,
         industryFilter: { mode: "ALL", match: "ANY", industries: [] },
         missingMarketCapBehavior: "INCLUDE",
+        shareClassBehavior: "ONE_PER_COMPANY",
         missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
         appliesTo: "DYNAMIC_STOCK_UNIVERSES",
       },
@@ -122,6 +177,31 @@ describe("PortfolioHandle", () => {
       },
     };
     const book = new PortfolioHandle({ name: "Copy Nancy Pelosi", strategies: [], policy });
+
+    assert.deepEqual(book.policy, policy);
+  });
+
+  it("reads a pairs policy that holds every share class", () => {
+    const policy = {
+      schemaVersion: 2,
+      revision: 3,
+      stockEligibility: {
+        minimumMarketCapUsd: 0,
+        maximumMarketCapUsd: null,
+        industryFilter: { mode: "ALL", match: "ANY", industries: [] },
+        missingMarketCapBehavior: "EXCLUDE",
+        shareClassBehavior: "ALL_CLASSES",
+        missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
+        appliesTo: "DYNAMIC_STOCK_UNIVERSES",
+      },
+      automatedApproval: {
+        enabled: false,
+        maxAutomatedTradesPerDay: 2,
+        countingUnit: "TRADE_ACTION",
+        dailyWindow: "AMERICA_NEW_YORK_CALENDAR_DAY",
+      },
+    };
+    const book = new PortfolioHandle({ name: "GOOG/GOOGL pair", strategies: [], policy });
 
     assert.deepEqual(book.policy, policy);
   });
