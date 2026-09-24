@@ -773,6 +773,49 @@ describe("custom indicators", () => {
     assert.equal(points[0].availableAt, "2024-04-06T00:00:00.000Z");
   });
 
+  it("makes a 1min bar available at its close and refuses earlier availability", async () => {
+    const transport = new FakeTransport([
+      { indicator: { customIndicatorId: "ci-1" } },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.createCustomIndicator(
+      {
+        name: "SPY 1m state",
+        pointKind: "period_aggregate",
+        aggregatePeriod: "1min",
+        points: [
+          { timestamp: "2026-09-21T09:30:00-04:00", value: 1, ticker: "SPY" },
+          { timestamp: "2026-09-21T13:31:00Z", value: -1, ticker: "SPY" },
+        ],
+      },
+      { idempotencyKey: "spy-1m-v1" }
+    );
+    const points = transport.calls[0].body?.points as Array<
+      Record<string, unknown>
+    >;
+    assert.deepEqual(
+      points.map((point) => point.availableAt),
+      ["2026-09-21T13:31:00.000Z", "2026-09-21T13:32:00.000Z"]
+    );
+
+    for (const bad of [
+      { timestamp: "2026-09-21", value: 1 },
+      { timestamp: "2026-09-21T13:30:15Z", value: 1 },
+      { timestamp: "2026-09-21T13:30:00Z", availableAt: "2026-09-20", value: 1 },
+    ]) {
+      await assert.rejects(
+        client.createCustomIndicator({
+          name: "bad",
+          pointKind: "period_aggregate",
+          aggregatePeriod: "1min",
+          points: [bad],
+        }, { idempotencyKey: "bad-1m" }),
+        /1min/
+      );
+    }
+  });
+
   it("passes the archive filter when listing", async () => {
     const transport = new FakeTransport([
       { indicators: [{ customIndicatorId: "ci-1" }] },
