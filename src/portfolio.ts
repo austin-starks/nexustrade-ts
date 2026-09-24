@@ -62,7 +62,8 @@ export interface ReadonlyPortfolioPolicy {
       readonly match: "ANY" | "ALL";
       readonly industries: readonly string[];
     };
-    readonly missingMarketCapBehavior: "EXCLUDE";
+    /** INCLUDE keeps names with no known market cap (ETFs, unsized filers); the politician copy bots use it. */
+    readonly missingMarketCapBehavior: "EXCLUDE" | "INCLUDE";
     readonly missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET";
     readonly appliesTo: "DYNAMIC_STOCK_UNIVERSES";
   };
@@ -106,7 +107,8 @@ function isReadonlyPortfolioPolicy(
     (industry.mode === "ALL" || industry.mode === "INCLUDE_ONLY") &&
     (industry.match === "ANY" || industry.match === "ALL") &&
     isStringArray(industry.industries) &&
-    stock.missingMarketCapBehavior === "EXCLUDE" &&
+    (stock.missingMarketCapBehavior === "EXCLUDE" ||
+      stock.missingMarketCapBehavior === "INCLUDE") &&
     stock.missingIndustryBehavior === "EXCLUDE_WHEN_FILTER_SET" &&
     stock.appliesTo === "DYNAMIC_STOCK_UNIVERSES" &&
     typeof automation.enabled === "boolean" &&
