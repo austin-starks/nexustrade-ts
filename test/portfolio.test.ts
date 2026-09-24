@@ -101,6 +101,31 @@ describe("PortfolioHandle", () => {
     assert.equal(book.toJSON().policy, undefined);
   });
 
+  it("reads a policy that keeps names with no market cap", () => {
+    // The politician copy bots: no floor, and ETFs and unsized filers kept.
+    const policy = {
+      schemaVersion: 2,
+      revision: 1,
+      stockEligibility: {
+        minimumMarketCapUsd: 0,
+        maximumMarketCapUsd: null,
+        industryFilter: { mode: "ALL", match: "ANY", industries: [] },
+        missingMarketCapBehavior: "INCLUDE",
+        missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
+        appliesTo: "DYNAMIC_STOCK_UNIVERSES",
+      },
+      automatedApproval: {
+        enabled: false,
+        maxAutomatedTradesPerDay: 2,
+        countingUnit: "TRADE_ACTION",
+        dailyWindow: "AMERICA_NEW_YORK_CALENDAR_DAY",
+      },
+    };
+    const book = new PortfolioHandle({ name: "Copy Nancy Pelosi", strategies: [], policy });
+
+    assert.deepEqual(book.policy, policy);
+  });
+
   it("backtest prefers portfolioId once saved", async () => {
     const transport = new FakeTransport([
       { operations: [{ id: "bt-1", kind: "backtest", status: "running" }] },
