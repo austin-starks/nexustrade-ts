@@ -2007,13 +2007,14 @@ export function Plus(left: Indicator, right: Indicator): Indicator {
  * PoliticalTrades indicator.
  * @param asset Pass CANDIDATE inside a rebalance pipeline to bind each stock.
  * @param filer Member full or last name. Pass an empty string for all members.
- * @param metric Amount-range aggregate, event count, or distinct purchasing members.
+ * @param metric Amount-range aggregate, event count, distinct purchasing members, or Held: 1 while the member still holds the asset (latest public disclosure is a purchase or partial sale), ignoring the window.
  * @param windowDays Trailing calendar days measured from when each event became public.
  * @param amountBasis Range endpoint used by amount metrics; LowerBound is conservative.
  * @param instrument Equity excludes confirmed option disclosures; Option selects them explicitly.
  * @param chamber Optional advanced cohort filter; named-member requests should normally use All.
+ * @param memberId Bioguide id such as P000197. Matches exactly and overrides filer, because names collide.
  */
-export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmount" | "BuyAmount" | "SellAmount" | "BuyCount" | "SellCount" | "DistinctBuyers" = "BuyAmount", windowDays: number = 90, amountBasis: "LowerBound" | "Midpoint" | "UpperBound" = "LowerBound", instrument: "Equity" | "Option" | "All" = "Equity", chamber: "All" | "House" | "Senate" = "All"): Indicator {
+export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmount" | "BuyAmount" | "SellAmount" | "BuyCount" | "SellCount" | "DistinctBuyers" | "Held" = "BuyAmount", windowDays: number = 90, amountBasis: "LowerBound" | "Midpoint" | "UpperBound" = "LowerBound", instrument: "Equity" | "Option" | "All" = "Equity", chamber: "All" | "House" | "Senate" = "All", memberId: string = ""): Indicator {
   const d: Record<string, unknown> = { type: "PoliticalTrades" };
   setAsset(d, "targetAsset", asset);
   d["filer"] = filer;
@@ -2022,6 +2023,7 @@ export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmou
   d["amountBasis"] = amountBasis;
   d["instrument"] = instrument;
   d["chamber"] = chamber;
+  d["memberId"] = memberId;
   return d as unknown as Indicator;
 }
 /**
