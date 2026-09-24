@@ -1294,6 +1294,17 @@ export function GapSize(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * HeikinAshi indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param line Which one-minute Heikin-Ashi value to evaluate. streak is the signed length of the current same-color run (0 once it shows an opposite-direction wick, and on a doji)
+ */
+export function HeikinAshi(asset: AssetArg, line: "open" | "high" | "low" | "close" | "streak" = "close"): Indicator {
+  const d: Record<string, unknown> = { type: "HeikinAshi" };
+  setAsset(d, "targetAsset", asset);
+  d["line"] = line;
+  return d as unknown as Indicator;
+}
+/**
  * HighOfDay indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  */
