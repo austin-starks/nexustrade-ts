@@ -81,6 +81,7 @@ describe("PortfolioHandle", () => {
           industries: ["artificialIntelligence", "biotechnology"],
         },
         missingMarketCapBehavior: "EXCLUDE",
+        shareClassBehavior: "ONE_PER_COMPANY",
         missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
         appliesTo: "DYNAMIC_STOCK_UNIVERSES",
       },
@@ -111,6 +112,7 @@ describe("PortfolioHandle", () => {
         maximumMarketCapUsd: null,
         industryFilter: { mode: "ALL", match: "ANY", industries: [] },
         missingMarketCapBehavior: "INCLUDE",
+        shareClassBehavior: "ONE_PER_COMPANY",
         missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
         appliesTo: "DYNAMIC_STOCK_UNIVERSES",
       },
@@ -122,6 +124,31 @@ describe("PortfolioHandle", () => {
       },
     };
     const book = new PortfolioHandle({ name: "Copy Nancy Pelosi", strategies: [], policy });
+
+    assert.deepEqual(book.policy, policy);
+  });
+
+  it("reads a pairs policy that holds every share class", () => {
+    const policy = {
+      schemaVersion: 2,
+      revision: 3,
+      stockEligibility: {
+        minimumMarketCapUsd: 0,
+        maximumMarketCapUsd: null,
+        industryFilter: { mode: "ALL", match: "ANY", industries: [] },
+        missingMarketCapBehavior: "EXCLUDE",
+        shareClassBehavior: "ALL_CLASSES",
+        missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET",
+        appliesTo: "DYNAMIC_STOCK_UNIVERSES",
+      },
+      automatedApproval: {
+        enabled: false,
+        maxAutomatedTradesPerDay: 2,
+        countingUnit: "TRADE_ACTION",
+        dailyWindow: "AMERICA_NEW_YORK_CALENDAR_DAY",
+      },
+    };
+    const book = new PortfolioHandle({ name: "GOOG/GOOGL pair", strategies: [], policy });
 
     assert.deepEqual(book.policy, policy);
   });

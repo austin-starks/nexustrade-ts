@@ -64,6 +64,8 @@ export interface ReadonlyPortfolioPolicy {
     };
     /** INCLUDE keeps names with no known market cap (ETFs, unsized filers); the politician copy bots use it. */
     readonly missingMarketCapBehavior: "EXCLUDE" | "INCLUDE";
+    /** ONE_PER_COMPANY keeps one share class per company in a selection; ALL_CLASSES allows pairs such as GOOG/GOOGL. */
+    readonly shareClassBehavior: "ONE_PER_COMPANY" | "ALL_CLASSES";
     readonly missingIndustryBehavior: "EXCLUDE_WHEN_FILTER_SET";
     readonly appliesTo: "DYNAMIC_STOCK_UNIVERSES";
   };
@@ -109,6 +111,8 @@ function isReadonlyPortfolioPolicy(
     isStringArray(industry.industries) &&
     (stock.missingMarketCapBehavior === "EXCLUDE" ||
       stock.missingMarketCapBehavior === "INCLUDE") &&
+    (stock.shareClassBehavior === "ONE_PER_COMPANY" ||
+      stock.shareClassBehavior === "ALL_CLASSES") &&
     stock.missingIndustryBehavior === "EXCLUDE_WHEN_FILTER_SET" &&
     stock.appliesTo === "DYNAMIC_STOCK_UNIVERSES" &&
     typeof automation.enabled === "boolean" &&
