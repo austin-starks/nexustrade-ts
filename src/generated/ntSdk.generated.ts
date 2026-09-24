@@ -1676,6 +1676,24 @@ export function Minus(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * MinuteBarHigh indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function MinuteBarHigh(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "MinuteBarHigh" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * MinuteBarLow indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function MinuteBarLow(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "MinuteBarLow" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
  * MinutesAfterOpen indicator.
  */
 export function MinutesAfterOpen(): Indicator {

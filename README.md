@@ -239,7 +239,7 @@ price target. Live option strategies must choose an explicit Limit policy.
 
 | Group               | Examples                                                                                     |
 | ------------------- | -------------------------------------------------------------------------------------------- |
-| **Price & volume**  | `Price` `OpeningPrice` `HighOfDay` `VWAP` `Volume` `GapPercentage`                           |
+| **Price & volume**  | `Price` `OpeningPrice` `HighOfDay` `MinuteBarHigh` `MinuteBarLow` `VWAP` `Volume` `GapPercentage` |
 | **Technicals**      | `SMA` `EMA` `RSI` `BollingerBand` `AverageTrueRange` `CrossAbove`                            |
 | **Position state**  | `PositionValue` `PositionPercentChange` `PositionMaxDrawdown`                                |
 | **Portfolio state** | `PortfolioValue` `BuyingPower` `MaxDrawdown` `InitialValue`                                  |
