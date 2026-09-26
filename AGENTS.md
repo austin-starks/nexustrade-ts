@@ -261,13 +261,13 @@ const book = nt.portfolio("Momentum", [
     ],
     weightIndicator: nt.RSI(nt.CANDIDATE, 14),
     limit: 10,
-    deploymentPercent: 80,
+    deploymentPercent: nt.Value(80),
   })),
 ], { initialValue: 100_000 });
 ```
 
 Note the key is `universe`, not `universeConfig` (the Python SDK spells it
-`universe_config`). `deploymentPercent: 80` invests 80% of the portfolio across
+`universe_config`). `deploymentPercent: nt.Value(80)` invests 80% of the portfolio across
 the selection and leaves the rest in cash — a **total** cap, not per-name.
 </details>
 

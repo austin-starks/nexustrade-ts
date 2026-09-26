@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   RebalanceEstimatedCost,
   RebalanceExpectedBenefit,
+  PoliticalPurchaseShare,
   Value,
   dynamicRebalance,
   geneAllocationPolicy,
@@ -17,6 +18,24 @@ import {
 } from "../src/generated/ntSdk.generated.ts";
 
 describe("adaptive allocation authoring", () => {
+  it("authors a member-wide mixed purchase budget with weighted option names", () => {
+    const equityShare = PoliticalPurchaseShare("P000197", "Equity", "Midpoint");
+    const optionShare = PoliticalPurchaseShare("P000197", "Option", "Midpoint");
+    const stocks = dynamicRebalance({
+      universe: universe("SP500"), pipeline: [], weightIndicator: Value(1),
+      deploymentPercent: equityShare,
+    });
+    const options = rebalanceOption({
+      universe: universe("SP500"), pipeline: [], weightIndicator: Value(1),
+      structureTemplates: [],
+      totalBudget: { type: "percent of portfolio", amount: optionShare },
+      sizingMode: "proportionalToWeight",
+    });
+    assert.deepEqual(stocks.deploymentPercent, equityShare);
+    assert.deepEqual(options.totalBudget?.amount, optionShare);
+    assert.equal(options.sizingMode, "proportionalToWeight");
+  });
+
   it("shares one policy shape across equity and options actions", () => {
     const policy = meanVarianceAllocation({
       lookbackPeriods: 126,

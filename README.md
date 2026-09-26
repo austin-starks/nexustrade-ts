@@ -166,7 +166,7 @@ const book = nt.portfolio(
         ],
         weightIndicator: nt.RSI(nt.CANDIDATE, 14),
         limit: 10,
-        deploymentPercent: 80,
+        deploymentPercent: nt.Value(80),
       })
     ),
   ],
