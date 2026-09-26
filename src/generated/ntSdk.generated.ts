@@ -53,7 +53,8 @@ export interface DepositWithdrawAllocation { type: DepositWithdrawAllocationType
 export interface OptionAllocation { type: OptionAllocationType; amount: number }
 /** DynamicRebalance per-name cap: contracts and buying-power percent are rejected. */
 export interface PerNameAllocation { type: "percent of portfolio" | "dollars"; amount: number }
-export interface DeploymentBudget { type: DeploymentBudgetType; amount: number }
+/** Author budget values as indicators, including Value for a constant. */
+export interface DeploymentBudget { type: DeploymentBudgetType; amount: Indicator }
 
 export interface ExpirationSelector {
   minDaysToExpiration: number;
@@ -244,7 +245,7 @@ export interface DynamicRebalanceAction {
   pipeline: PipelineStage[];
   weightIndicator: Indicator | CandidateIndicator;
   limit?: number;
-  deploymentPercent?: number;
+  deploymentPercent?: Indicator;
   perNameAllocation?: PerNameAllocation;
   /**
    * Candidate-bound gate on NON-TARGET FULL EXITS only. Omitted = always sell
@@ -272,6 +273,7 @@ export interface RebalanceOptionAction {
   limit?: number;
   totalBudget?: DeploymentBudget;
   perNameAllocation?: OptionAllocation;
+  sizingMode?: "fixedPerName" | "proportionalToWeight";
   positionScope?: RebalanceOptionPositionScope;
   sleeves?: RebalanceOptionSleeve[];
   allocationPolicy?: AllocationPolicy;
@@ -404,6 +406,7 @@ export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
 export type MinOrMax = "min" | "max";
+export type AmountBasis = "LowerBound" | "Midpoint" | "UpperBound";
 
 export const CANDIDATE = { __candidate: true } as unknown as Candidate;
 /** Portfolio-wide targetAssets: [] — rebalance cadence, not per-ticker DCA. */
@@ -678,7 +681,7 @@ export const launchAgent = (config: {
 
 export const dynamicRebalance = (config: {
   universe: Universe; pipeline: PipelineStage[]; weightIndicator: Indicator | CandidateIndicator;
-  limit?: number; deploymentPercent?: number; perNameAllocation?: PerNameAllocation;
+  limit?: number; deploymentPercent?: Indicator; perNameAllocation?: PerNameAllocation;
   canSell?: Condition | CandidateCondition;
   allowShorts?: boolean;
   allocationPolicy?: AllocationPolicy;
@@ -781,6 +784,7 @@ export const rebalanceOption = (config: {
   limit?: number;
   totalBudget?: DeploymentBudget;
   perNameAllocation?: OptionAllocation;
+  sizingMode?: "fixedPerName" | "proportionalToWeight";
   positionScope?: RebalanceOptionPositionScope;
   sleeves?: RebalanceOptionSleeve[];
   allocationPolicy?: AllocationPolicy;
@@ -2056,6 +2060,19 @@ export function Plus(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * PoliticalPurchaseShare indicator.
+ * @param memberId Bioguide member id, for example P000197. The share uses the member's whole public purchase record.
+ * @param instrument Which side of the equity/option purchase mix to return, as a percent from 0 to 100.
+ * @param amountBasis Estimate for disclosed purchase ranges. Midpoint is the default.
+ */
+export function PoliticalPurchaseShare(memberId: string, instrument: "Equity" | "Option" = "Equity", amountBasis: AmountBasis = "Midpoint"): Indicator {
+  const d: Record<string, unknown> = { type: "PoliticalPurchaseShare" };
+  d["memberId"] = memberId;
+  d["instrument"] = instrument;
+  d["amountBasis"] = amountBasis;
+  return d as unknown as Indicator;
+}
+/**
  * PoliticalTrades indicator.
  * @param asset Pass CANDIDATE inside a rebalance pipeline to bind each stock.
  * @param filer Member full or last name. Pass an empty string for all members.
@@ -2066,7 +2083,7 @@ export function Plus(left: Indicator, right: Indicator): Indicator {
  * @param chamber Optional advanced cohort filter; named-member requests should normally use All.
  * @param memberId Bioguide id such as P000197. Matches exactly and overrides filer, because names collide.
  */
-export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmount" | "BuyAmount" | "SellAmount" | "BuyCount" | "SellCount" | "DistinctBuyers" | "Held" = "BuyAmount", windowDays: number = 90, amountBasis: "LowerBound" | "Midpoint" | "UpperBound" = "LowerBound", instrument: "Equity" | "Option" | "All" = "Equity", chamber: "All" | "House" | "Senate" = "All", memberId: string = ""): Indicator {
+export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmount" | "BuyAmount" | "SellAmount" | "BuyCount" | "SellCount" | "DistinctBuyers" | "Held" = "BuyAmount", windowDays: number = 90, amountBasis: AmountBasis = "LowerBound", instrument: "Equity" | "Option" | "All" = "Equity", chamber: "All" | "House" | "Senate" = "All", memberId: string = ""): Indicator {
   const d: Record<string, unknown> = { type: "PoliticalTrades" };
   setAsset(d, "targetAsset", asset);
   d["filer"] = filer;
