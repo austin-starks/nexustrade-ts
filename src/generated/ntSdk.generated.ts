@@ -1471,13 +1471,15 @@ export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" |
  * @param manager Optional: a CIK such as 1067983, or part of a manager's name such as Renaissance Technologies. Leave empty for every manager. A CIK is exact; a name can match several firms
  * @param metric Managers holding, shares or value held, concentration, or the change since the previous quarter
  * @param windowDays Read a disclosed period only if its filing became public within this many trailing days
+ * @param instrument Calls and puts require an exact manager CIK and its effective public book
  */
-export function InstitutionalHoldings(asset: AssetArg, manager: string, metric: "HolderCount" | "TotalShares" | "TotalValue" | "ConcentrationTop5" | "NetShareChange" | "NetHolderChange" | "NewHolders" | "ClosedHolders" = "HolderCount", windowDays: number = 180): Indicator {
+export function InstitutionalHoldings(asset: AssetArg, manager: string, metric: "HolderCount" | "TotalShares" | "TotalValue" | "BookSharePercent" | "ConcentrationTop5" | "NetShareChange" | "NetHolderChange" | "NewHolders" | "ClosedHolders" = "HolderCount", windowDays: number = 180, instrument: "Equity" | "Call" | "Put" = "Equity"): Indicator {
   const d: Record<string, unknown> = { type: "InstitutionalHoldings" };
   setAsset(d, "targetAsset", asset);
   d["manager"] = manager;
   d["metric"] = metric;
   d["windowDays"] = windowDays;
+  d["instrument"] = instrument;
   return d as unknown as Indicator;
 }
 /**
