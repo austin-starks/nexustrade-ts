@@ -405,6 +405,7 @@ export type FundamentalMetric = "totalRevenue" | "grossProfit" | "operatingIncom
 export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
+export type Instrument = "Equity" | "Call" | "Put";
 export type MinOrMax = "min" | "max";
 export type AmountBasis = "LowerBound" | "Midpoint" | "UpperBound";
 
@@ -1452,17 +1453,20 @@ export function InitialValue(): Indicator {
 }
 /**
  * InsiderTrades indicator.
- * @param asset Ticker name (ex. SPY, BTC)
- * @param metric Dollar value, shares, trade counts, or distinct buying insiders
- * @param role Only trades by an officer, director, or 10% owner, or any insider
- * @param windowDays Count trades whose filings became public within this many trailing days
+ * @param asset Pass CANDIDATE in a dynamic rebalance pipeline.
+ * @param ownerCik Exact nonzero SEC reporting owner CIK, up to 10 digits. Omit for aggregate activity.
+ * @param issuerCik Restrict an exact owner to this company CIK; omit to follow them across companies.
+ * @param instrument Disclosed instrument; defaults to Equity. Call/Put, award and acquisition metrics, and budget shares require ownerCik. AwardCount is SEC code A issuer acquisitions, not cash purchases or vested-share proof. Its default Equity bucket includes unresolved restricted units. AcquisitionCount and AcquisitionSharePercent combine public code P purchases with code A issuer acquisitions. Shares use qualifying signal counts across all the owner's tickers.
  */
-export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "DistinctBuyers" = "NetValue", role: "Any" | "Officer" | "Director" | "TenPercentOwner" = "Any", windowDays: number = 90): Indicator {
+export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "AwardCount" | "AcquisitionCount" | "DistinctBuyers" | "PurchaseSharePercent" | "AcquisitionSharePercent", role: "Any" | "Officer" | "Director" | "TenPercentOwner", windowDays: number, ownerCik?: string, issuerCik?: string, instrument?: Instrument): Indicator {
   const d: Record<string, unknown> = { type: "InsiderTrades" };
   setAsset(d, "targetAsset", asset);
   d["metric"] = metric;
   d["role"] = role;
   d["windowDays"] = windowDays;
+  if (ownerCik !== undefined) d["ownerCik"] = ownerCik;
+  if (issuerCik !== undefined) d["issuerCik"] = issuerCik;
+  if (instrument !== undefined) d["instrument"] = instrument;
   return d as unknown as Indicator;
 }
 /**
@@ -1473,7 +1477,7 @@ export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" |
  * @param windowDays Read a disclosed period only if its filing became public within this many trailing days
  * @param instrument Calls and puts require an exact manager CIK and its effective public book
  */
-export function InstitutionalHoldings(asset: AssetArg, manager: string, metric: "HolderCount" | "TotalShares" | "TotalValue" | "BookSharePercent" | "ConcentrationTop5" | "NetShareChange" | "NetHolderChange" | "NewHolders" | "ClosedHolders" = "HolderCount", windowDays: number = 180, instrument: "Equity" | "Call" | "Put" = "Equity"): Indicator {
+export function InstitutionalHoldings(asset: AssetArg, manager: string, metric: "HolderCount" | "TotalShares" | "TotalValue" | "BookSharePercent" | "ConcentrationTop5" | "NetShareChange" | "NetHolderChange" | "NewHolders" | "ClosedHolders" = "HolderCount", windowDays: number = 180, instrument: Instrument = "Equity"): Indicator {
   const d: Record<string, unknown> = { type: "InstitutionalHoldings" };
   setAsset(d, "targetAsset", asset);
   d["manager"] = manager;
