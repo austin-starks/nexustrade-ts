@@ -405,6 +405,7 @@ export type FundamentalMetric = "totalRevenue" | "grossProfit" | "operatingIncom
 export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
+export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner";
 export type Instrument = "Equity" | "Call" | "Put";
 export type Instrument2 = "Equity" | "Option";
 export type MinOrMax = "min" | "max";
@@ -1459,7 +1460,7 @@ export function InitialValue(): Indicator {
  * @param issuerCik Restrict an exact owner to this company CIK; omit to follow them across companies.
  * @param instrument Disclosed instrument; defaults to Equity. Call/Put, award and acquisition metrics, and budget shares require ownerCik. AwardCount is SEC code A issuer acquisitions, not cash purchases or vested-share proof. Its default Equity bucket includes unresolved restricted units. AcquisitionCount and AcquisitionSharePercent combine public code P purchases with code A issuer acquisitions. Shares use qualifying signal counts across all the owner's tickers.
  */
-export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "AwardCount" | "AcquisitionCount" | "DistinctBuyers" | "PurchaseSharePercent" | "AcquisitionSharePercent", role: "Any" | "Officer" | "Director" | "TenPercentOwner", windowDays: number, ownerCik?: string, issuerCik?: string, instrument?: Instrument): Indicator {
+export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "AwardCount" | "AcquisitionCount" | "DistinctBuyers" | "PurchaseSharePercent" | "AcquisitionSharePercent", role: Role, windowDays: number, ownerCik?: string, issuerCik?: string, instrument?: Instrument): Indicator {
   const d: Record<string, unknown> = { type: "InsiderTrades" };
   setAsset(d, "targetAsset", asset);
   d["metric"] = metric;
@@ -1832,6 +1833,32 @@ export function Multiply(left: Indicator, right: Indicator): Indicator {
 export function Negative(operand: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Negative" };
   d.indicators = [operand];
+  return d as unknown as Indicator;
+}
+/**
+ * NewInsiderDisclosure indicator.
+ * @param ownerCik Exact SEC reporting owner CIK. Omit for aggregate Form 4 activity.
+ * @param issuerCik Optional company CIK; requires ownerCik.
+ * @param role The reporting owner's role.
+ * @param instrument Call and Put require ownerCik.
+ * @param disclosureAction Which newly public Form 4 action triggers a decision. Award requires ownerCik.
+ */
+export function NewInsiderDisclosure(ownerCik?: string, issuerCik?: string, role: Role = "Any", instrument: Instrument = "Equity", disclosureAction: "Any" | "Purchase" | "Sale" | "Award" = "Any"): Indicator {
+  const d: Record<string, unknown> = { type: "NewInsiderDisclosure" };
+  if (ownerCik !== undefined) d["ownerCik"] = ownerCik;
+  if (issuerCik !== undefined) d["issuerCik"] = issuerCik;
+  d["role"] = role;
+  d["instrument"] = instrument;
+  d["disclosureAction"] = disclosureAction;
+  return d as unknown as Indicator;
+}
+/**
+ * NewInstitutionalFiling indicator.
+ * @param manager Exact numeric SEC manager CIK. A new 13F accession, including an amendment, triggers one decision.
+ */
+export function NewInstitutionalFiling(manager: string): Indicator {
+  const d: Record<string, unknown> = { type: "NewInstitutionalFiling" };
+  d["manager"] = manager;
   return d as unknown as Indicator;
 }
 /**
