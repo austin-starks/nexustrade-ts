@@ -406,6 +406,7 @@ export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
 export type Instrument = "Equity" | "Call" | "Put";
+export type Instrument2 = "Equity" | "Option";
 export type MinOrMax = "min" | "max";
 export type AmountBasis = "LowerBound" | "Midpoint" | "UpperBound";
 
@@ -1834,6 +1835,19 @@ export function Negative(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * NewPoliticalDisclosure indicator.
+ * @param memberId Exact Bioguide member ID, such as P000197.
+ * @param instrument Equity or option disclosures, never both for a public bot arm.
+ * @param disclosureAction Which newly public trade sides trigger a decision.
+ */
+export function NewPoliticalDisclosure(memberId: string, instrument: Instrument2, disclosureAction: "Any" | "Purchase" | "Sale"): Indicator {
+  const d: Record<string, unknown> = { type: "NewPoliticalDisclosure" };
+  d["memberId"] = memberId;
+  d["instrument"] = instrument;
+  d["disclosureAction"] = disclosureAction;
+  return d as unknown as Indicator;
+}
+/**
  * OnBalanceVolume indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param interval Bar interval the volume is accumulated on
@@ -2071,7 +2085,7 @@ export function Plus(left: Indicator, right: Indicator): Indicator {
  * @param instrument Which side of the equity/option purchase mix to return, as a percent from 0 to 100.
  * @param amountBasis Estimate for disclosed purchase ranges. Midpoint is the default.
  */
-export function PoliticalPurchaseShare(memberId: string, instrument: "Equity" | "Option" = "Equity", amountBasis: AmountBasis = "Midpoint"): Indicator {
+export function PoliticalPurchaseShare(memberId: string, instrument: Instrument2 = "Equity", amountBasis: AmountBasis = "Midpoint"): Indicator {
   const d: Record<string, unknown> = { type: "PoliticalPurchaseShare" };
   d["memberId"] = memberId;
   d["instrument"] = instrument;
