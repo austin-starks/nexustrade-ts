@@ -246,6 +246,7 @@ export interface DynamicRebalanceAction {
   weightIndicator: Indicator | CandidateIndicator;
   limit?: number;
   deploymentPercent?: Indicator;
+  reserveOptionBudget?: DeploymentBudget;
   perNameAllocation?: PerNameAllocation;
   /**
    * Candidate-bound gate on NON-TARGET FULL EXITS only. Omitted = always sell
@@ -273,11 +274,15 @@ export interface RebalanceOptionAction {
   limit?: number;
   totalBudget?: DeploymentBudget;
   perNameAllocation?: OptionAllocation;
-  sizingMode?: "fixedPerName" | "proportionalToWeight";
+  sizingMode?: "fixedPerName" | "proportionalToWeight" | "proportionalToWeightWholeContracts";
   positionScope?: RebalanceOptionPositionScope;
   sleeves?: RebalanceOptionSleeve[];
   allocationPolicy?: AllocationPolicy;
   exposurePolicy?: ExposurePolicy;
+  /** Simulated option replacement before modeled expiry when no full sale was disclosed. */
+  renewBeforeDays?: number;
+  /** Revisit continuing public option targets only when another option filing arrives. */
+  revisitDisclosedTargets?: boolean;
 }
 export type OptionParentSelectionSort = "oldest" | "highestPnl" | "nearestExpiry";
 export type ParentStrikeOffset =
@@ -684,7 +689,7 @@ export const launchAgent = (config: {
 
 export const dynamicRebalance = (config: {
   universe: Universe; pipeline: PipelineStage[]; weightIndicator: Indicator | CandidateIndicator;
-  limit?: number; deploymentPercent?: Indicator; perNameAllocation?: PerNameAllocation;
+  limit?: number; deploymentPercent?: Indicator; reserveOptionBudget?: DeploymentBudget; perNameAllocation?: PerNameAllocation;
   canSell?: Condition | CandidateCondition;
   allowShorts?: boolean;
   allocationPolicy?: AllocationPolicy;
@@ -787,7 +792,7 @@ export const rebalanceOption = (config: {
   limit?: number;
   totalBudget?: DeploymentBudget;
   perNameAllocation?: OptionAllocation;
-  sizingMode?: "fixedPerName" | "proportionalToWeight";
+  sizingMode?: "fixedPerName" | "proportionalToWeight" | "proportionalToWeightWholeContracts";
   positionScope?: RebalanceOptionPositionScope;
   sleeves?: RebalanceOptionSleeve[];
   allocationPolicy?: AllocationPolicy;
@@ -1875,6 +1880,13 @@ export function NewPoliticalDisclosure(memberId: string, instrument: Instrument2
   return d as unknown as Indicator;
 }
 /**
+ * NewTradingWeek indicator.
+ */
+export function NewTradingWeek(): Indicator {
+  const d: Record<string, unknown> = { type: "NewTradingWeek" };
+  return d as unknown as Indicator;
+}
+/**
  * OnBalanceVolume indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param interval Bar interval the volume is accumulated on
@@ -2111,26 +2123,28 @@ export function Plus(left: Indicator, right: Indicator): Indicator {
  * @param memberId Bioguide member id, for example P000197. The share uses the member's whole public purchase record.
  * @param instrument Which side of the equity/option purchase mix to return, as a percent from 0 to 100.
  * @param amountBasis Estimate for disclosed purchase ranges. Midpoint is the default.
+ * @param purchaseScope AllPurchases preserves historical purchase flow. RemainingLots uses surviving purchase costs across identifiable tickers; unknown partial quantities retain their original estimate. Neither is current market value.
  */
-export function PoliticalPurchaseShare(memberId: string, instrument: Instrument2 = "Equity", amountBasis: AmountBasis = "Midpoint"): Indicator {
+export function PoliticalPurchaseShare(memberId: string, instrument: Instrument2 = "Equity", amountBasis: AmountBasis = "Midpoint", purchaseScope: "AllPurchases" | "RemainingLots" = "AllPurchases"): Indicator {
   const d: Record<string, unknown> = { type: "PoliticalPurchaseShare" };
   d["memberId"] = memberId;
   d["instrument"] = instrument;
   d["amountBasis"] = amountBasis;
+  d["purchaseScope"] = purchaseScope;
   return d as unknown as Indicator;
 }
 /**
  * PoliticalTrades indicator.
  * @param asset Pass CANDIDATE inside a rebalance pipeline to bind each stock.
  * @param filer Member full or last name. Pass an empty string for all members.
- * @param metric Amount-range aggregate, event count, distinct purchasing members, or Held: 1 while the member still holds the asset (latest public disclosure is a purchase or partial sale), ignoring the window.
+ * @param metric Amount-range aggregate, event count, distinct purchasing members, RemainingBuyAmount (surviving original purchase amounts; ignores window; unknown partial quantities retained), or Held: 1 while the member still holds the asset (latest public disclosure is a purchase or partial sale), ignoring the window.
  * @param windowDays Trailing calendar days measured from when each event became public.
  * @param amountBasis Range endpoint used by amount metrics; LowerBound is conservative.
  * @param instrument Equity excludes confirmed option disclosures; Option selects them explicitly.
  * @param chamber Optional advanced cohort filter; named-member requests should normally use All.
  * @param memberId Bioguide id such as P000197. Matches exactly and overrides filer, because names collide.
  */
-export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmount" | "BuyAmount" | "SellAmount" | "BuyCount" | "SellCount" | "DistinctBuyers" | "Held" = "BuyAmount", windowDays: number = 90, amountBasis: AmountBasis = "LowerBound", instrument: "Equity" | "Option" | "All" = "Equity", chamber: "All" | "House" | "Senate" = "All", memberId: string = ""): Indicator {
+export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmount" | "BuyAmount" | "RemainingBuyAmount" | "SellAmount" | "BuyCount" | "SellCount" | "DistinctBuyers" | "Held" = "BuyAmount", windowDays: number = 90, amountBasis: AmountBasis = "LowerBound", instrument: "Equity" | "Option" | "All" = "Equity", chamber: "All" | "House" | "Senate" = "All", memberId: string = ""): Indicator {
   const d: Record<string, unknown> = { type: "PoliticalTrades" };
   setAsset(d, "targetAsset", asset);
   d["filer"] = filer;
