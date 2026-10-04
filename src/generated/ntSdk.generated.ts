@@ -410,7 +410,7 @@ export type FundamentalMetric = "totalRevenue" | "grossProfit" | "operatingIncom
 export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
-export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner";
+export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
 export type Instrument = "Equity" | "Call" | "Put";
 export type Instrument2 = "Equity" | "Option";
 export type MinOrMax = "min" | "max";
@@ -1461,9 +1461,9 @@ export function InitialValue(): Indicator {
 /**
  * InsiderTrades indicator.
  * @param asset Pass CANDIDATE in a dynamic rebalance pipeline.
- * @param ownerCik Exact nonzero SEC reporting owner CIK, up to 10 digits. Omit for aggregate activity.
- * @param issuerCik Restrict an exact owner to this company CIK; omit to follow them across companies.
- * @param instrument Disclosed instrument; defaults to Equity. Call/Put, award and acquisition metrics, and budget shares require ownerCik. AwardCount is SEC code A issuer acquisitions, not cash purchases or vested-share proof. Its default Equity bucket includes unresolved restricted units. AcquisitionCount and AcquisitionSharePercent combine public code P purchases with code A issuer acquisitions. Shares use qualifying signal counts across all the owner's tickers.
+ * @param ownerCik Exact nonzero SEC reporting owner CIK, up to 10 digits. Omit for a whole company (with issuerCik) or aggregate activity.
+ * @param issuerCik Company CIK. With ownerCik, restricts that owner to this company. Alone, every reporting owner's events at this company, a joint filing counted once.
+ * @param instrument Disclosed instrument; defaults to Equity. Call/Put, award and acquisition metrics, and budget shares require ownerCik or issuerCik. AwardCount is SEC code A issuer acquisitions, not cash purchases or vested-share proof. Its default Equity bucket includes unresolved restricted units. AcquisitionCount and AcquisitionSharePercent combine public code P purchases with code A issuer acquisitions. Shares use qualifying signal counts across all the owner's tickers, or all the company's tickers under issuerCik alone.
  */
 export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "AwardCount" | "AcquisitionCount" | "DistinctBuyers" | "PurchaseSharePercent" | "AcquisitionSharePercent", role: Role, windowDays: number, ownerCik?: string, issuerCik?: string, instrument?: Instrument): Indicator {
   const d: Record<string, unknown> = { type: "InsiderTrades" };
@@ -1842,11 +1842,11 @@ export function Negative(operand: Indicator): Indicator {
 }
 /**
  * NewInsiderDisclosure indicator.
- * @param ownerCik Exact SEC reporting owner CIK. Omit for aggregate Form 4 activity.
- * @param issuerCik Optional company CIK; requires ownerCik.
+ * @param ownerCik Exact SEC reporting owner CIK. Omit for a whole company (with issuerCik) or aggregate Form 4 activity.
+ * @param issuerCik Company CIK. With ownerCik, restricts that owner; alone, every reporting owner at this company, a joint filing once.
  * @param role The reporting owner's role.
- * @param instrument Call and Put require ownerCik.
- * @param disclosureAction Which newly public Form 4 action triggers a decision. Award requires ownerCik.
+ * @param instrument Call and Put require ownerCik or issuerCik.
+ * @param disclosureAction Which newly public Form 4 action triggers a decision. Award requires ownerCik or issuerCik.
  */
 export function NewInsiderDisclosure(ownerCik?: string, issuerCik?: string, role: Role = "Any", instrument: Instrument = "Equity", disclosureAction: "Any" | "Purchase" | "Sale" | "Award" = "Any"): Indicator {
   const d: Record<string, unknown> = { type: "NewInsiderDisclosure" };
