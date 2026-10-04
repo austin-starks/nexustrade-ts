@@ -35,6 +35,7 @@ interface ConformanceCase {
   /** Positional arguments that precede `input`. */
   args?: JsonValue[];
   idempotency_key?: string;
+  options?: JsonObject;
   responses: JsonObject[];
   expected_calls: ExpectedCall[];
   expected_result?: JsonValue;
@@ -51,6 +52,7 @@ const CASES_PATH = join(
   "client-cases.json",
 );
 const NO_BODY_METHODS = new Set([
+  "list_orders",
   "get_backtest",
   "get_brokerage",
   "get_custom_indicator",
@@ -135,6 +137,9 @@ function invoke(
   }
   return call.call(client, ...leading, testCase.input, {
     idempotencyKey: testCase.idempotency_key,
+    ...(testCase.options?.portfolio_id === undefined
+      ? {}
+      : { portfolioId: testCase.options.portfolio_id }),
   });
 }
 

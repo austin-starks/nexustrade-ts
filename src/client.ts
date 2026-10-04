@@ -7,7 +7,12 @@
 
 import { AgentRun } from "./agent.ts";
 import { LazyDotenv, environmentValue } from "./env.ts";
-import type { JobRequest, Portfolio, Strategy } from "./generated/ntSdk.generated.js";
+import type {
+  JobRequest,
+  OrderStatus,
+  Portfolio,
+  Strategy,
+} from "./generated/ntSdk.generated.js";
 import {
   PortfolioHandle,
   type DeployResult,
@@ -120,6 +125,14 @@ function editOperationAsJsonObject(
   operation: PortfolioEditOperation
 ): JsonObject {
   return { ...operation } as unknown as JsonObject;
+}
+
+export interface ListOrdersOptions {
+  portfolioId?: string;
+  statuses?: ReadonlyArray<OrderStatus>;
+  page?: number;
+  limit?: number;
+  includeRebalanceOrders?: boolean;
 }
 
 export interface ListPortfoliosOptions {
@@ -1998,6 +2011,51 @@ export class NexusTradeClient {
     }
     return this.transport.request("POST", "orders", {
       body: { portfolioId, orders: orders.map((order) => ({ ...order })) },
+      idempotencyKey: options.idempotencyKey,
+    });
+  }
+
+  /** List owned orders. Defaults to Accepted and Pending User Approval; pages are 1-based. */
+  async listOrders(options: ListOrdersOptions = {}): Promise<JsonObject> {
+    if (options.statuses !== undefined && options.statuses.length === 0) {
+      throw new Error("statuses must be a non-empty array.");
+    }
+    const query = encodeQuery({
+      portfolioId: options.portfolioId,
+      statuses: options.statuses?.join(","),
+      page: options.page === undefined ? undefined : String(options.page),
+      limit: options.limit === undefined ? undefined : String(options.limit),
+      includeRebalanceOrders:
+        options.includeRebalanceOrders === undefined
+          ? undefined
+          : String(options.includeRebalanceOrders),
+    });
+    return this.transport.request("GET", `orders${query}`);
+  }
+
+  /** Cancel explicit order IDs; inspect both canceled and rejected. Live cancellation reaches the broker. */
+  async cancelOrders(
+    orderIds: ReadonlyArray<string>,
+    options: { idempotencyKey: string; portfolioId?: string }
+  ): Promise<JsonObject> {
+    if (
+      !Array.isArray(orderIds) ||
+      orderIds.length === 0 ||
+      orderIds.some((id) => typeof id !== "string" || !id.trim())
+    ) {
+      throw new Error(
+        "orderIds must be a non-empty array of non-empty strings."
+      );
+    }
+    if (orderIds.length > 50)
+      throw new Error("at most 50 orders may be canceled per request.");
+    return this.transport.request("POST", "orders/cancel", {
+      body: {
+        orderIds: [...orderIds],
+        ...(options.portfolioId === undefined
+          ? {}
+          : { portfolioId: options.portfolioId }),
+      },
       idempotencyKey: options.idempotencyKey,
     });
   }
