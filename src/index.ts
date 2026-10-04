@@ -17,6 +17,7 @@ export type {
   HttpTransportOptions,
   JsonObject,
   JsonValue,
+  ListOrdersOptions,
   ListPortfoliosOptions,
   NexusTradeClientOptions,
   PortfolioEditOperation,
