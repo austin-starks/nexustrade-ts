@@ -18,6 +18,7 @@ import {
 import type {
   AuthoredPortfolioPolicy,
   AuthoredStockEligibility,
+  DividendPolicy,
   Portfolio,
   Strategy,
 } from "./generated/ntSdk.generated.js";
@@ -181,6 +182,8 @@ export class PortfolioHandle implements Portfolio {
   supportsFractionalShares?: boolean;
   supportsCrypto?: boolean;
   alertsEnabled?: boolean;
+  /** "cash" (the default when omitted) or "reinvest". */
+  dividendPolicy?: DividendPolicy;
 
   /** Chat draft id after `save()`, or fetched portfolio id. Not serialized. */
   id: string | null = null;
@@ -250,6 +253,9 @@ export class PortfolioHandle implements Portfolio {
     if (typeof record.alertsEnabled === "boolean") {
       this.alertsEnabled = record.alertsEnabled;
     }
+    if (record.dividendPolicy === "cash" || record.dividendPolicy === "reinvest") {
+      this.dividendPolicy = record.dividendPolicy;
+    }
     if (
       record.type === "paper" ||
       record.type === "live" ||
@@ -279,6 +285,7 @@ export class PortfolioHandle implements Portfolio {
         key === "supportsFractionalShares" ||
         key === "supportsCrypto" ||
         key === "alertsEnabled" ||
+        key === "dividendPolicy" ||
         key === "type" ||
         key === "isActive" ||
         key === "strategyNames" ||
@@ -328,6 +335,9 @@ export class PortfolioHandle implements Portfolio {
     }
     if (this.alertsEnabled !== undefined) {
       body.alertsEnabled = this.alertsEnabled;
+    }
+    if (this.dividendPolicy !== undefined) {
+      body.dividendPolicy = this.dividendPolicy;
     }
     if (this.type !== undefined) body.type = this.type;
     if (this.isActive !== undefined) body.isActive = this.isActive;
@@ -451,6 +461,8 @@ export class PortfolioHandle implements Portfolio {
     initialValue?: number;
     generateEvents?: boolean;
     feeConfig?: JsonObject;
+    /** Overrides the portfolio's own dividend policy for this run only. */
+    dividendPolicy?: DividendPolicy;
     transport?: Transport;
   }): Promise<JsonObject> {
     const transport = await this.#resolveTransport(options.transport);
@@ -474,6 +486,9 @@ export class PortfolioHandle implements Portfolio {
       input.generateEvents = options.generateEvents;
     }
     if (options.feeConfig !== undefined) input.feeConfig = options.feeConfig;
+    if (options.dividendPolicy !== undefined) {
+      input.dividendPolicy = options.dividendPolicy;
+    }
 
     const response = await transport.request("POST", "backtests/batch", {
       body: { backtests: [input] },
