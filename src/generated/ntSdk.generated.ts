@@ -384,8 +384,11 @@ export interface Portfolio {
   strategies: Strategy[];
   main?: boolean; supportsFractionalShares?: boolean; supportsCrypto?: boolean;
   alertsEnabled?: boolean;
+  /** "cash" (default when omitted) or "reinvest" into the paying stock. */
+  dividendPolicy?: DividendPolicy;
   policy?: AuthoredPortfolioPolicy;
 }
+export type DividendPolicy = "cash" | "reinvest";
 
 export type AssetType = "Stock" | "Cryptocurrency" | "Option" | "Other";
 export type Interval = "Day" | "Hour" | "Minute";
@@ -891,6 +894,7 @@ export const portfolio = (
   options: {
     initialValue?: number; main?: boolean;
     supportsFractionalShares?: boolean; supportsCrypto?: boolean; alertsEnabled?: boolean;
+    dividendPolicy?: DividendPolicy;
     policy?: AuthoredPortfolioPolicy;
   } = {},
 ): PortfolioHandle => {
@@ -2519,6 +2523,8 @@ export interface BacktestConfig {
   generateEvents?: boolean;
   /** Optional fee contract keyed by AssetTypeEnum (Stock/Cryptocurrency/Option) with {amount, type: percent|dollars}. Omit for shared defaults (Option $0.65/contract). For replay of an optimizer/walk-forward study, pass that study's persisted feeConfig. Option fill slippage (OptionSlippageFraction) is not set here — engine default 0.5 applies. */
   feeConfig?: FeeConfig;
+  /** Overrides the portfolio's dividend policy for this run only. Omit to use the portfolio's own setting (cash unless it was set to reinvest). "reinvest" buys more of the paying stock on each pay date, which is what a buy-and-hold comparison against the SPY total-return baseline needs. */
+  dividendPolicy?: "cash" | "reinvest";
 }
 export interface WalkForwardConfig {
   /** Global calendar start for the walk-forward study (ISO date). Each Minute evaluation window cannot exceed 730 days of minute data counting minute-indicator warmup, which is the only cap; the 90-day seed first look is a default for callers who name no dates. */
@@ -2626,6 +2632,7 @@ export const backtest = (
     "initial_value": config.initialValue,
     "generate_events": config.generateEvents,
     "fee_config": config.feeConfig,
+    "dividend_policy": config.dividendPolicy,
   }),
 });
 

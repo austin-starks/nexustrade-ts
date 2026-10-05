@@ -837,6 +837,7 @@ const BACKTEST_ARG_NAMES: ReadonlyArray<readonly [string, string]> = [
   ["initial_value", "initialValue"],
   ["generate_events", "generateEvents"],
   ["fee_config", "feeConfig"],
+  ["dividend_policy", "dividendPolicy"],
 ];
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {
