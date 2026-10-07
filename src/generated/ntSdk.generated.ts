@@ -1235,6 +1235,15 @@ export function Divide(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * Consecutive completed calendar years, ending with the last completed year, in which the asset's regular cash dividends (summed by ex-date in America/New_York, split-adjusted, special dividends excluded) were strictly higher than the year before; the in-progress current year never counts. Returns 0 when the last completed year was not a raise and null when the asset has no dividend history.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function DividendRaiseStreak(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "DividendRaiseStreak" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
  * DonchianChannel indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
