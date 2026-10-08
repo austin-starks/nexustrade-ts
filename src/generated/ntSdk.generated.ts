@@ -410,6 +410,7 @@ export type OptionSpreadType = "vertical" | "calendar" | "diagonal" | "ironCondo
 export type CloseScope = "spread" | "leg";
 export type RebalanceOptionPositionScope = "portfolio" | "strategy";
 export type FundamentalMetric = "totalRevenue" | "grossProfit" | "operatingIncome" | "ebitda" | "epsActual" | "epsEstimate" | "netIncome" | "freeCashFlow" | "totalAssets" | "totalLiab" | "shortTermDebt" | "longTermDebt" | "commonStockSharesOutstanding" | "dividendYield" | "openingPrice" | "highestPrice" | "lowestPrice" | "closingPrice" | "volume" | "marketCap" | "peRatioTTM" | "psRatioTTM" | "pbRatioTTM" | "enterpriseValue";
+export type Period = "Year" | "Quarter" | "Month";
 export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
@@ -1035,6 +1036,32 @@ export function CompoundAnnualGrowthRate(asset: AssetArg, metric: FundamentalMet
   return d as unknown as Indicator;
 }
 /**
+ * Number of consecutive completed calendar periods (America/New_York; period is Year, Quarter or Month), ending with the last completed period, whose closing value of the inner indicator was strictly higher (ConsecutiveIncrease) or strictly lower (ConsecutiveDecrease) than the previous period's closing value. A period's closing value is the inner indicator's last non-null value observed in that period. The in-progress current period never counts, equal values are not a change, and a completed period with no value breaks the streak. The count is capped at lookback (an integer from 1 to 60). Returns null when no completed period has a value. Examples: ConsecutiveIncrease(LastDividend(KO), Year, 10) >= 10 (KO raised its regular dividend per share in each of the last 10 completed years); ConsecutiveIncrease(Fundamental(AAPL, totalRevenue), Quarter, 8) (consecutive completed quarters of higher reported revenue for AAPL, up to 8).
+ * @param indicator The inner indicator whose period closing values are compared. Pass CANDIDATE to its asset in a dynamic rebalance pipeline.
+ * @param period Calendar period (America/New_York) whose closing values are compared.
+ * @param lookback Whole number of completed periods to count, 1 to 60; the streak is capped here.
+ */
+export function ConsecutiveDecrease(indicator: Indicator, period: Period, lookback: number): Indicator {
+  const d: Record<string, unknown> = { type: "ConsecutiveDecrease" };
+  d["period"] = period;
+  d["lookback"] = lookback;
+  d.indicators = [indicator];
+  return d as unknown as Indicator;
+}
+/**
+ * Number of consecutive completed calendar periods (America/New_York; period is Year, Quarter or Month), ending with the last completed period, whose closing value of the inner indicator was strictly higher (ConsecutiveIncrease) or strictly lower (ConsecutiveDecrease) than the previous period's closing value. A period's closing value is the inner indicator's last non-null value observed in that period. The in-progress current period never counts, equal values are not a change, and a completed period with no value breaks the streak. The count is capped at lookback (an integer from 1 to 60). Returns null when no completed period has a value. Examples: ConsecutiveIncrease(LastDividend(KO), Year, 10) >= 10 (KO raised its regular dividend per share in each of the last 10 completed years); ConsecutiveIncrease(Fundamental(AAPL, totalRevenue), Quarter, 8) (consecutive completed quarters of higher reported revenue for AAPL, up to 8).
+ * @param indicator The inner indicator whose period closing values are compared. Pass CANDIDATE to its asset in a dynamic rebalance pipeline.
+ * @param period Calendar period (America/New_York) whose closing values are compared.
+ * @param lookback Whole number of completed periods to count, 1 to 60; the streak is capped here.
+ */
+export function ConsecutiveIncrease(indicator: Indicator, period: Period, lookback: number): Indicator {
+  const d: Record<string, unknown> = { type: "ConsecutiveIncrease" };
+  d["period"] = period;
+  d["lookback"] = lookback;
+  d.indicators = [indicator];
+  return d as unknown as Indicator;
+}
+/**
  * ConsecutiveTrue indicator.
  * @param condition Condition evaluated over the window.
  * @param length Length of time
@@ -1232,15 +1259,6 @@ export function DaysUntilEarnings(asset: AssetArg): Indicator {
 export function Divide(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Divide" };
   d.indicators = [left, right];
-  return d as unknown as Indicator;
-}
-/**
- * Consecutive completed calendar years, ending with the last completed year, in which the asset's regular cash dividends (summed by ex-date in America/New_York, split-adjusted, special dividends excluded) were strictly higher than the year before; the in-progress current year never counts. Returns 0 when the last completed year was not a raise and null when the asset has no dividend history.
- * @param asset Ticker name (ex. SPY, BTC)
- */
-export function DividendRaiseStreak(asset: AssetArg): Indicator {
-  const d: Record<string, unknown> = { type: "DividendRaiseStreak" };
-  setAsset(d, "targetAsset", asset);
   return d as unknown as Indicator;
 }
 /**
