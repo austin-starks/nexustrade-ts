@@ -1613,6 +1613,15 @@ export function KeltnerChannel(asset: AssetArg, length: number = 20, interval: I
   return d as unknown as Indicator;
 }
 /**
+ * The most recent regular cash dividend per share whose ex-dividend date is on or before the evaluation date (America/New_York), split-adjusted onto today's share basis, special dividends excluded. Returns null when the asset has no regular dividend on or before that date. Each payment is one observation for TrailingSum, so TrailingSum(LastDividend(asset), 4) sums the last four payments, which is trailing-twelve-month dividends for a quarterly payer (use 12 for a monthly payer).
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function LastDividend(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "LastDividend" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
  * LastOrderPrice indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param side Matches order events with this side (buy or sell)
