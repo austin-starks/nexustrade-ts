@@ -747,6 +747,31 @@ tables; your SQL does not change when it does.
 > The Python SDK additionally ships `nt.lake.sql(...)`, a DuckDB/pandas
 > convenience layer over these same endpoints.
 
+## Managed watchlist universes
+
+`nt.updateWatchlist({watchlistKey, memberId, instrument, amountBasis, chamber, output})`
+maintains a visible managed list from `PoliticalRemainingPurchases`. Its strategy
+has no condition and places no orders. `nt.watchlistUniverse(watchlistKey)` selects
+that producer's committed membership for a separate `DynamicRebalance` in the same
+portfolio. Each key has one producer and may have several consumers. Other action
+types cannot consume this universe.
+
+```ts
+const producer = nt.updateWatchlist({
+  watchlistKey: "pelosi-holdings", memberId: "P000197", instrument: "Equity",
+  amountBasis: "Midpoint", chamber: "All",
+  output: {name: "Pelosi disclosed holdings", purpose: "Follow public holdings",
+    alertSettings: {onChange: true, inApp: true, email: true, briefCadence: "weekly"}},
+});
+const consumerUniverse = nt.watchlistUniverse("pelosi-holdings");
+```
+
+`output` supplies initial name, purpose and alerts. Subsequent user renames and
+settings remain authoritative. Live and paper consumers wait for durable list
+publication; backtests keep membership local to the run and never edit the user's
+visible list. Discovery and data loads remain full, so this does not establish a
+performance saving. Omitted amount basis uses `LowerBound`.
+
 ## Complete method reference
 
 Every public method on `NexusTradeClient`. A test in this package fails if one
