@@ -46,7 +46,8 @@ export type PipelineStage =
  */
 export type Universe =
   | { source: "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" }
-  | { source: "SPECIFIC_ASSETS"; assets: Asset[] };
+  | { source: "SPECIFIC_ASSETS"; assets: Asset[] }
+  | { source: "WATCHLIST"; watchlistKey: string };
 
 export interface Allocation { type: AllocationType; amount: number }
 export interface DepositWithdrawAllocation { type: DepositWithdrawAllocationType; amount: number }
@@ -191,6 +192,28 @@ export type CloseOptionTrigger =
 export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amount: Allocation }
 export interface DepositOrWithdrawAction { type: "Deposit" | "Withdraw"; amount: DepositWithdrawAllocation }
 export interface AlertAction { type: "Alert"; message: string }
+/**
+ * Keep a portfolio-scoped list set to every security where a member of Congress
+ * still holds disclosed purchases. Refreshes every tick, places no orders, and
+ * takes no condition. A DynamicRebalance reads it with watchlistUniverse(key).
+ * Backtests use run-local membership; live and paper wait for durable publication.
+ */
+export interface UpdateWatchlistAction {
+  type: "UpdateWatchlist";
+  watchlistKey: string;
+  output?: {
+    name?: string;
+    purpose?: string;
+    alertSettings?: { onChange: boolean; inApp: boolean; email: boolean; briefCadence: "inherit" | "daily" | "weekly" | "never" };
+  };
+  source: {
+    type: "PoliticalRemainingPurchases";
+    memberId: string;
+    instrument?: "Equity" | "Option" | "All";
+    amountBasis?: "LowerBound" | "Midpoint" | "UpperBound";
+    chamber?: "All" | "House" | "Senate";
+  };
+}
 export interface LaunchAgentAction {
   type: "LaunchAgent";
   planningModel: string;
@@ -329,7 +352,8 @@ export type Action =
   | DynamicRebalanceAction
   | RebalanceOptionAction
   | OpenOptionAction
-  | CloseOptionAction;
+  | CloseOptionAction
+  | UpdateWatchlistAction;
 
 export type StrategyLimitWorkingTime =
   | { type: "Day" }
@@ -394,7 +418,7 @@ export type AssetType = "Stock" | "Cryptocurrency" | "Option" | "Other";
 export type Interval = "Day" | "Hour" | "Minute";
 export type Comparator = "lessThan" | "greaterThan" | "lessThanOrEqual" | "greaterThanOrEqual" | "equal" | "notEqual";
 export type SelectDirection = "Highest" | "Lowest";
-export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS";
+export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS" | "WATCHLIST";
 export type AllocationType = "percent of portfolio" | "percent of buying power" | "percent of current positions" | "dollars" | "number of assets";
 export type DepositWithdrawAllocationType = "percent of portfolio" | "percent of buying power" | "dollars";
 export type OptionAllocationType = "dollars" | "percent of portfolio" | "percent of buying power" | "contracts" | "percent of realized premium";
@@ -674,6 +698,9 @@ export function universe(source: UniverseSource, assets?: AssetArg[]): Universe 
   return { source } as Universe;
 }
 
+/** The latest revision of the list an updateWatchlist producer in this portfolio maintains. */
+export const watchlistUniverse = (watchlistKey: string): Universe => ({ source: "WATCHLIST", watchlistKey });
+
 // ---- equity + cash actions ----
 
 export const buy = (
@@ -690,6 +717,24 @@ export const launchAgent = (config: {
   maxIterations: number; includeMarketData: boolean; continueExisting: boolean;
   skipPlanning: boolean; cooldownMinutes?: number;
 }): LaunchAgentAction => compact({ type: "LaunchAgent", ...config }) as LaunchAgentAction;
+export const updateWatchlist = (config: {
+  watchlistKey: string; memberId: string;
+  output?: UpdateWatchlistAction["output"];
+  instrument?: "Equity" | "Option" | "All";
+  amountBasis?: "LowerBound" | "Midpoint" | "UpperBound";
+  chamber?: "All" | "House" | "Senate";
+}): UpdateWatchlistAction => ({
+  type: "UpdateWatchlist",
+  watchlistKey: config.watchlistKey,
+  ...(config.output ? { output: config.output } : {}),
+  source: compact({
+    type: "PoliticalRemainingPurchases",
+    memberId: config.memberId,
+    instrument: config.instrument,
+    amountBasis: config.amountBasis,
+    chamber: config.chamber,
+  }) as UpdateWatchlistAction["source"],
+});
 
 export const dynamicRebalance = (config: {
   universe: Universe; pipeline: PipelineStage[]; weightIndicator: Indicator | CandidateIndicator;
