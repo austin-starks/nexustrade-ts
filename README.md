@@ -772,6 +772,38 @@ publication; backtests keep membership local to the run and never edit the user'
 visible list. Discovery and data loads remain full, so this does not establish a
 performance saving. Omitted amount basis uses `LowerBound`.
 
+`updateInstitutionalWatchlist` follows an exact manager's latest publicly
+available complete equity book. `updateInsiderWatchlist` selects qualifying
+positive purchases by first public availability, with optional owner, issuer,
+and role scope. Both use the same publication and consumer contract:
+
+```ts
+const manager = nt.updateInstitutionalWatchlist({
+  watchlistKey: "berkshire-equities", managerCik: "1067983",
+});
+const insider = nt.updateInsiderWatchlist({
+  watchlistKey: "insider-purchases", windowDays: 90, role: "OfficerOrDirector",
+});
+const screen = nt.updateScreenerWatchlist({
+  watchlistKey: "berkshire-top-20", refreshMinutes: 1440,
+  columns: [nt.screenColumn("price", nt.screenPrice()),
+    nt.screenColumn("holding", nt.screenDisclosure(manager.source))],
+  filter: nt.screenAll(nt.screenCompare("price", "Gte", 5),
+    nt.screenCompare("holding", "Gt", 0)),
+  selection: nt.screenTop("holding", 20),
+});
+const screenUniverse = nt.watchlistUniverse("berkshire-top-20");
+```
+
+The screen evaluates on its scheduled cadence and reuses accepted membership
+between refreshes. Missing facts remain unknown. `screenAny` composes OR rules;
+`screenPercentile` ranks the filtered candidates with known rank values.
+`screenBarVolume` and `screenBarDollarVolume` require a completed historical
+bar; live quotes do not supply those metrics in this release. Price and disclosure
+metrics support live screens. Failed coverage or publication blocks new allocation
+while consumers retain their exit behavior. Screen execution uses in-memory DuckDB;
+no local database volume or LLM call is required for refreshes.
+
 ## Complete method reference
 
 Every public method on `NexusTradeClient`. A test in this package fails if one

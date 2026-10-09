@@ -193,11 +193,26 @@ export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amo
 export interface DepositOrWithdrawAction { type: "Deposit" | "Withdraw"; amount: DepositWithdrawAllocation }
 export interface AlertAction { type: "Alert"; message: string }
 /**
- * Keep a portfolio-scoped list set to every security where a member of Congress
- * still holds disclosed purchases. Refreshes every tick, places no orders, and
+ * Keep a portfolio-scoped list set to currently public source membership.
+ * Refreshes every tick, places no orders, and
  * takes no condition. A DynamicRebalance reads it with watchlistUniverse(key).
  * Backtests use run-local membership; live and paper wait for durable publication.
  */
+export type DisclosureWatchlistSource = {
+  type: "PoliticalRemainingPurchases"; memberId: string; instrument?: "Equity" | "Option" | "All";
+  amountBasis?: "LowerBound" | "Midpoint" | "UpperBound"; chamber?: "All" | "House" | "Senate";
+} | { type: "InstitutionalHoldings"; managerCik: string; windowDays?: number }
+  | { type: "InsiderPurchases"; windowDays: number; role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector"; ownerCik?: string; issuerCik?: string };
+export type ScreenMetric = { type: "ObservedPrice" | "BarVolume" | "BarDollarVolume" }
+  | { type: "Disclosure"; source: DisclosureWatchlistSource };
+export type ScreenRule = { type: "Compare"; field: string; op: "Gt" | "Gte" | "Lt" | "Lte" | "Eq" | "Ne"; value: number }
+  | { type: "All" | "Any"; rules: ScreenRule[] };
+export type ScreenSelection = { type: "Top"; field: string; direction: "Ascending" | "Descending"; limit: number }
+  | { type: "Percentile"; field: string; direction: "Ascending" | "Descending"; percentile: number };
+export interface ScreenerSource {
+  type: "Screener"; columns: { key: string; metric: ScreenMetric }[]; filter: ScreenRule;
+  selection?: ScreenSelection; refreshMinutes: number;
+}
 export interface UpdateWatchlistAction {
   type: "UpdateWatchlist";
   watchlistKey: string;
@@ -206,16 +221,11 @@ export interface UpdateWatchlistAction {
     purpose?: string;
     alertSettings?: { onChange: boolean; inApp: boolean; email: boolean; briefCadence: "inherit" | "daily" | "weekly" | "never" };
   };
-  source: {
-    type: "PoliticalRemainingPurchases";
-    memberId: string;
-    instrument?: "Equity" | "Option" | "All";
-    amountBasis?: "LowerBound" | "Midpoint" | "UpperBound";
-    chamber?: "All" | "House" | "Senate";
-  };
+  source: DisclosureWatchlistSource | ScreenerSource;
 }
 export interface LaunchAgentAction {
   type: "LaunchAgent";
+  watchlistId?: string;
   planningModel: string;
   executionModel: string;
   initialMessage: string;
@@ -715,7 +725,7 @@ export const alert = (message: string): AlertAction => ({ type: "Alert", message
 export const launchAgent = (config: {
   planningModel: string; executionModel: string; initialMessage: string;
   maxIterations: number; includeMarketData: boolean; continueExisting: boolean;
-  skipPlanning: boolean; cooldownMinutes?: number;
+  skipPlanning: boolean; cooldownMinutes?: number; watchlistId?: string;
 }): LaunchAgentAction => compact({ type: "LaunchAgent", ...config }) as LaunchAgentAction;
 export const updateWatchlist = (config: {
   watchlistKey: string; memberId: string;
@@ -723,7 +733,7 @@ export const updateWatchlist = (config: {
   instrument?: "Equity" | "Option" | "All";
   amountBasis?: "LowerBound" | "Midpoint" | "UpperBound";
   chamber?: "All" | "House" | "Senate";
-}): UpdateWatchlistAction => ({
+}): UpdateWatchlistAction & { source: Extract<DisclosureWatchlistSource, {type: "PoliticalRemainingPurchases"}> } => ({
   type: "UpdateWatchlist",
   watchlistKey: config.watchlistKey,
   ...(config.output ? { output: config.output } : {}),
@@ -733,8 +743,47 @@ export const updateWatchlist = (config: {
     instrument: config.instrument,
     amountBasis: config.amountBasis,
     chamber: config.chamber,
-  }) as UpdateWatchlistAction["source"],
+  }) as Extract<DisclosureWatchlistSource, {type: "PoliticalRemainingPurchases"}>,
 });
+
+export const updateInstitutionalWatchlist = (config: {
+  watchlistKey: string; managerCik: string; windowDays?: number;
+  output?: UpdateWatchlistAction["output"];
+}): UpdateWatchlistAction & { source: Extract<DisclosureWatchlistSource, {type: "InstitutionalHoldings"}> } => ({
+  type: "UpdateWatchlist", watchlistKey: config.watchlistKey,
+  ...(config.output ? { output: config.output } : {}),
+  source: compact({ type: "InstitutionalHoldings", managerCik: config.managerCik, windowDays: config.windowDays }) as Extract<DisclosureWatchlistSource, {type: "InstitutionalHoldings"}>,
+});
+export const updateInsiderWatchlist = (config: {
+  watchlistKey: string; windowDays: number;
+  role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
+  ownerCik?: string; issuerCik?: string; output?: UpdateWatchlistAction["output"];
+}): UpdateWatchlistAction & { source: Extract<DisclosureWatchlistSource, {type: "InsiderPurchases"}> } => ({
+  type: "UpdateWatchlist", watchlistKey: config.watchlistKey,
+  ...(config.output ? { output: config.output } : {}),
+  source: compact({ type: "InsiderPurchases", windowDays: config.windowDays, role: config.role,
+    ownerCik: config.ownerCik, issuerCik: config.issuerCik }) as Extract<DisclosureWatchlistSource, {type: "InsiderPurchases"}>,
+});
+
+/** Scalar PIT screen: facts are sampled only when due. Volume uses certified completed historical OHLC at the replay interval; live quote/trade volume stays unknown. */
+export const updateScreenerWatchlist = (config: Omit<ScreenerSource, "type"> & {
+  watchlistKey: string; output?: UpdateWatchlistAction["output"];
+}): UpdateWatchlistAction & {source: ScreenerSource} => ({
+  type: "UpdateWatchlist", watchlistKey: config.watchlistKey,
+  ...(config.output ? {output: config.output} : {}),
+  source: compact({type: "Screener", columns: config.columns, filter: config.filter,
+    selection: config.selection, refreshMinutes: config.refreshMinutes}) as ScreenerSource,
+});
+export const screenColumn = (key: string, metric: ScreenMetric): ScreenerSource["columns"][number] => ({key, metric});
+export const screenPrice = (): ScreenMetric => ({type: "ObservedPrice"});
+export const screenBarVolume = (): ScreenMetric => ({type: "BarVolume"});
+export const screenBarDollarVolume = (): ScreenMetric => ({type: "BarDollarVolume"});
+export const screenDisclosure = (source: DisclosureWatchlistSource): ScreenMetric => ({type: "Disclosure", source});
+export const screenCompare = (field: string, op: "Gt" | "Gte" | "Lt" | "Lte" | "Eq" | "Ne", value: number): ScreenRule => ({type: "Compare", field, op, value});
+export const screenAll = (...rules: ScreenRule[]): ScreenRule => ({type: "All", rules});
+export const screenAny = (...rules: ScreenRule[]): ScreenRule => ({type: "Any", rules});
+export const screenTop = (field: string, limit: number, direction: "Ascending" | "Descending" = "Descending"): ScreenSelection => ({type: "Top", field, direction, limit});
+export const screenPercentile = (field: string, percentile: number, direction: "Ascending" | "Descending" = "Descending"): ScreenSelection => ({type: "Percentile", field, direction, percentile});
 
 export const dynamicRebalance = (config: {
   universe: Universe; pipeline: PipelineStage[]; weightIndicator: Indicator | CandidateIndicator;
