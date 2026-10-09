@@ -234,7 +234,6 @@ export interface LaunchAgentAction {
   continueExisting: boolean;
   skipPlanning: boolean;
   cooldownMinutes?: number;
-  watchlistId?: string;
 }
 export interface MeanVarianceAllocationPolicy {
   type: "MeanVariance";
