@@ -225,6 +225,7 @@ export interface UpdateWatchlistAction {
 }
 export interface LaunchAgentAction {
   type: "LaunchAgent";
+  watchlistId?: string;
   planningModel: string;
   executionModel: string;
   initialMessage: string;
