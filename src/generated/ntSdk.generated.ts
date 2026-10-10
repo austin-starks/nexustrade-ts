@@ -413,6 +413,10 @@ export interface AuthoredStockEligibility {
 export interface AuthoredPortfolioPolicy {
   stockEligibility: AuthoredStockEligibility;
 }
+export interface AuthoredDeploymentTiming {
+  frequency: "Constant" | "OpenClose";
+  openDelayMinutes?: number; closeLeadMinutes?: number; intervalSeconds?: number;
+}
 export interface Portfolio {
   name: string; initialValue?: number; cash?: number; buyingPower?: number;
   strategies: Strategy[];
@@ -421,6 +425,7 @@ export interface Portfolio {
   /** "cash" (default when omitted) or "reinvest" into the paying stock. */
   dividendPolicy?: DividendPolicy;
   policy?: AuthoredPortfolioPolicy;
+  deployment?: AuthoredDeploymentTiming;
 }
 export type DividendPolicy = "cash" | "reinvest";
 
@@ -991,6 +996,7 @@ export const portfolio = (
     supportsFractionalShares?: boolean; supportsCrypto?: boolean; alertsEnabled?: boolean;
     dividendPolicy?: DividendPolicy;
     policy?: AuthoredPortfolioPolicy;
+    deployment?: AuthoredDeploymentTiming;
   } = {},
 ): PortfolioHandle => {
   const initialValue = options.initialValue ?? 10000;
