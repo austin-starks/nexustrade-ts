@@ -312,9 +312,9 @@ export interface RebalanceOptionAction {
   sleeves?: RebalanceOptionSleeve[];
   allocationPolicy?: AllocationPolicy;
   exposurePolicy?: ExposurePolicy;
-  /** Simulated option replacement before modeled expiry when no full sale was disclosed. */
+  /** Disclosure maintenance only: requires a NewPoliticalDisclosure Option condition with exactly one memberId; integer 1..90. Not a generic DTE roll. */
   renewBeforeDays?: number;
-  /** Revisit continuing public option targets only when another option filing arrives. */
+  /** Disclosure maintenance only: revisit continuing public option targets when another option filing arrives. Same condition restriction as renewBeforeDays. */
   revisitDisclosedTargets?: boolean;
 }
 export type OptionParentSelectionSort = "oldest" | "highestPnl" | "nearestExpiry";
@@ -887,20 +887,8 @@ export const sleeve = (config: {
  * Rank a universe and rotate an option book. Keep take-profit / stop-loss / DTE
  * exits in separate closeOption strategies, not here.
  */
-export const rebalanceOption = (config: {
-  universe: Universe;
-  pipeline: PipelineStage[];
-  weightIndicator: Indicator | CandidateIndicator;
-  structureTemplates: OptionStructureTemplate[];
-  limit?: number;
-  totalBudget?: DeploymentBudget;
-  perNameAllocation?: OptionAllocation;
-  sizingMode?: "fixedPerName" | "proportionalToWeight" | "proportionalToWeightWholeContracts";
-  positionScope?: RebalanceOptionPositionScope;
-  sleeves?: RebalanceOptionSleeve[];
-  allocationPolicy?: AllocationPolicy;
-  exposurePolicy?: ExposurePolicy;
-}): RebalanceOptionAction => compact({ type: "RebalanceOption", ...config }) as RebalanceOptionAction;
+export const rebalanceOption = (config: Omit<RebalanceOptionAction, "type">): RebalanceOptionAction =>
+  compact({ type: "RebalanceOption", ...config }) as RebalanceOptionAction;
 
 export const pnlTrigger = (bounds: { minPnlPercent?: number; maxPnlPercent?: number }): CloseOptionTrigger =>
   compact({ type: "pnl", ...bounds }) as CloseOptionTrigger;
@@ -2635,7 +2623,7 @@ export interface FeeConfig {
   Stock?: FeeAmount;
   Cryptocurrency?: FeeAmount;
   Option?: FeeAmount;
-  /** Rust-owned option fill slippage; absent means the engine's 0.5 default. */
+  /** Option fill slippage: 0=quote mid, 1=ask for buys/bid for sells; absent means 0.5. Requires a current executable quote. */
   OptionSlippageFraction?: number;
 }
 export interface MetricConstraint {
@@ -2674,7 +2662,7 @@ export interface BacktestConfig {
   initialValue?: number;
   /** Generate detailed event data (signals, orders, audits) during backtest. Costs 5x research tokens. Events are Mongo hot-store traces retained for 3 days. Use query_backtest_events to explore them while retained. */
   generateEvents?: boolean;
-  /** Optional fee contract keyed by AssetTypeEnum (Stock/Cryptocurrency/Option) with {amount, type: percent|dollars}. Omit for shared defaults (Option $0.65/contract). For replay of an optimizer/walk-forward study, pass that study's persisted feeConfig. Option fill slippage (OptionSlippageFraction) is not set here — engine default 0.5 applies. */
+  /** Optional fee contract keyed by AssetTypeEnum (Stock/Cryptocurrency/Option) with {amount, type: percent|dollars}. Omit for shared defaults (Option $0.65/contract). For replay of an optimizer/walk-forward study, pass that study's persisted feeConfig. OptionSlippageFraction is supported: 0 fills at quote mid, 1 at ask for buys/bid for sells; omitted uses the engine default 0.5. Fills require a current executable quote; this does not enable last-trade fallback pricing. */
   feeConfig?: FeeConfig;
   /** Overrides the portfolio's dividend policy for this run only. Omit to use the portfolio's own setting (cash unless it was set to reinvest). "reinvest" buys more of the paying stock on each pay date, which is what a buy-and-hold comparison against the SPY total-return baseline needs. */
   dividendPolicy?: "cash" | "reinvest";
