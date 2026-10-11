@@ -1109,6 +1109,23 @@ export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval:
   return d as unknown as Indicator;
 }
 /**
+ * ChartBar indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ * @param barMinutes Completed candles aligned to 9:30 ET for stocks. Must divide the 390-minute regular session.
+ * @param line open: oldest selected candle; close: newest; high/low: range; sma: mean candle closes.
+ * @param bars Number of chart candles, not elapsed minutes. SMA20 on five-minute candles: barMinutes=5, bars=20.
+ * @param offsetBars Skip this many latest completed candles. 1 selects the previous window.
+ */
+export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" | "high" | "low" | "close" | "sma" = "close", bars: number = 1, offsetBars: number = 0): Indicator {
+  const d: Record<string, unknown> = { type: "ChartBar" };
+  setAsset(d, "targetAsset", asset);
+  d["barMinutes"] = barMinutes;
+  d["line"] = line;
+  d["bars"] = bars;
+  d["offsetBars"] = offsetBars;
+  return d as unknown as Indicator;
+}
+/**
  * CommodityChannelIndex indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
