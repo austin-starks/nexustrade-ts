@@ -104,12 +104,15 @@ export interface ReplaceStrategiesOperation {
   strategyObjects: Strategy[];
 }
 
-/**
- * The edits `updatePortfolio` accepts. Deploy, undeploy, delete, scheduling and
- * trading-policy operations are deliberately absent: they are not reachable on
- * this route, so typing them here would only compile a guaranteed 403.
- */
+/** Complete finished authored patch; omitted fields retain their saved values. */
+export interface UpdatePortfolioOperation {
+  type: "updatePortfolio";
+  portfolio: Partial<Pick<Portfolio, "name" | "initialValue" | "strategies" | "deployment" | "policy" | "dividendPolicy" | "alertsEnabled" | "supportsFractionalShares" | "supportsCrypto">>;
+}
+
+/** All operations in one call for this portfolio are validated and saved atomically. */
 export type PortfolioEditOperation =
+  | UpdatePortfolioOperation
   | PortfolioRenameOperation
   | AddStrategiesOperation
   | RemoveStrategiesOperation
@@ -1364,8 +1367,8 @@ export class NexusTradeClient {
 
   /**
    * Apply deterministic no-code portfolio edits without invoking Aurora.
-   * Guest workspaces may rename and add/remove/replace strategies; deployment,
-   * scheduling, policy, and trading operations remain account-only.
+   * Finished authored patches can combine strategies, evaluation timing and
+   * stock eligibility in one save. Activation and automated approval remain separate.
    */
   async updatePortfolio(
     portfolioId: string,
