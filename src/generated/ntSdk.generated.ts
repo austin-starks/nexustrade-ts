@@ -1103,14 +1103,16 @@ export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval:
  * @param line open: oldest selected candle; close: newest; high/low: range; sma: mean candle closes.
  * @param bars Number of chart candles, not elapsed minutes. SMA20 on five-minute candles: barMinutes=5, bars=20.
  * @param offsetBars Skip this many latest completed candles. 1 selects the previous window.
+ * @param minutePolicy strict requires every minute. observed aggregates actual eligible-trade prints, skips empty candles, and publishes after the clock bucket closes. No synthetic prices; source coverage is a separate check.
  */
-export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" | "high" | "low" | "close" | "sma" = "close", bars: number = 1, offsetBars: number = 0): Indicator {
+export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" | "high" | "low" | "close" | "sma" = "close", bars: number = 1, offsetBars: number = 0, minutePolicy: "strict" | "observed" = "strict"): Indicator {
   const d: Record<string, unknown> = { type: "ChartBar" };
   setAsset(d, "targetAsset", asset);
   d["barMinutes"] = barMinutes;
   d["line"] = line;
   d["bars"] = bars;
   d["offsetBars"] = offsetBars;
+  d["minutePolicy"] = minutePolicy;
   return d as unknown as Indicator;
 }
 /**
