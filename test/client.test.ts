@@ -98,6 +98,19 @@ describe("NexusTradeClient", () => {
     ]);
   });
 
+  it("sends strategies and cadence in one finished authored patch", async () => {
+    const transport = new FakeTransport([{ portfolio: { id: "p-9", name: "Combined" } }]);
+    const client = new NexusTradeClient({ transport });
+    const operations: PortfolioEditOperation[] = [{ type: "updatePortfolio", portfolio: {
+      name: "Combined", strategies: [strategy("Entry", always(), buy(stockAsset("SPY"), 42, "dollars"))],
+      deployment: { frequency: "Constant", intervalSeconds: 60 }, dividendPolicy: "reinvest",
+    } }];
+    await client.updatePortfolio("p-9", operations, { idempotencyKey: "combined-v1" });
+    assert.equal(transport.calls.length, 1);
+    assert.deepEqual(transport.calls[0].body, { operations });
+    assert.equal(transport.calls[0].idempotencyKey, "combined-v1");
+  });
+
   it("sends a typed replaceStrategy with its waiting Limit policy intact", async () => {
     const transport = new FakeTransport([
       { portfolio: { id: "p-9", name: "AAPL Income" } },

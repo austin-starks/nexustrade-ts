@@ -394,9 +394,15 @@ await client.updatePortfolio(portfolioId, operations, {
 });
 ```
 
-The five edits are `rename`, `addStrategies`, `removeStrategies`,
-`replaceStrategy`, and `replaceStrategies`. Deploy, undeploy, delete,
-scheduling, and trading-policy operations are not reachable on this route.
+Prefer one `updatePortfolio` operation with a finished `portfolio` patch.
+It can combine `strategies`, `deployment` (frequency and timing), `name`,
+`policy.stockEligibility`, `dividendPolicy`, and alerts. Omitted fields retain
+their saved values. Draft starting capital and capabilities can change only
+before deployment. The existing strategy and rename operations remain supported.
+Every authored operation for the target in one call commits together; validation
+failure saves none of them. Reusing the same idempotency key replays the saved
+result. Deploy, undeploy, delete and automated approval remain separate account
+operations.
 
 **`replaceStrategies` replaces the whole set**, so a strategy left out of the
 array is deleted. Carry unchanged strategies through verbatim, including the
@@ -827,7 +833,7 @@ is missing here, so this list cannot drift from the code.
 | `createPortfolio(book, { idempotencyKey })` | Persist a portfolio definition               |
 | `listPortfolios(options)`                   | List portfolios, with filters and pagination |
 | `getPortfolio(portfolioId)`                 | Read one portfolio                           |
-| `updatePortfolio(id, operations, { idempotencyKey })` | Rename or edit strategies deterministically |
+| `updatePortfolio(id, operations, { idempotencyKey })` | Atomically save a finished authored portfolio patch |
 | `forkPublicPortfolio(sharedId, { idempotencyKey })` | Fork a public portfolio into the workspace |
 | `deploy(portfolioId, { frequency })`        | Start paper trading it                       |
 | `undeploy(portfolioId)`                     | Stop it                                      |

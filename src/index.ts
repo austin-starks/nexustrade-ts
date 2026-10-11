@@ -21,6 +21,7 @@ export type {
   ListPortfoliosOptions,
   NexusTradeClientOptions,
   PortfolioEditOperation,
+  UpdatePortfolioOperation,
   PortfolioRenameOperation,
   RemoveStrategiesOperation,
   ReplaceStrategiesOperation,
