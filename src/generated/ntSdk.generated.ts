@@ -2027,6 +2027,19 @@ export function NewPoliticalDisclosure(memberId: string, instrument: Instrument2
   return d as unknown as Indicator;
 }
 /**
+ * Labelled news sentiment about the asset over its last lookbackDays daily news snapshots (default 1, the latest). Each trading day has one snapshot at 09:15 New York, and a row is visible from its snapshot's time. The lake assigns each article to the first snapshot it could have been in: for history that is by publish time, and an article that live collection fetched or labelled after a snapshot's deadline is moved to the next session's snapshot. Backtests and live trading read the same rows by that time. lookbackDays counts trading sessions whether or not the asset had news in them. Only articles in which the asset is the subject or significantly affected count; passing mentions, law-firm solicitations and routine filings never do, and copies of one story within 7 days count once per session. measure (default Mean): Mean is the average sentiment from -1.0 to 1.0, NetCount is positive minus negative articles, ArticleCount is the number of qualifying articles. Every measure has no value when the window cannot be read in full: before coverage begins in May 2021, across sessions with no published snapshot, or when the latest snapshot due has not been published. Mean also has no value when the window holds no qualifying article; the counts are then 0. Rows follow the security, so META reads Facebook-era FB articles.
+ * @param asset Pass CANDIDATE in a dynamic rebalance pipeline.
+ * @param measure Mean: average sentiment from -1 to 1, with no value when the window has no qualifying news. NetCount: positive minus negative articles. ArticleCount: qualifying articles. Every measure has no value before May 2021 coverage, across missing snapshots, or when the due snapshot is unpublished.
+ * @param lookbackDays Whole trading sessions of daily 09:15 New York news snapshots; 1 is the latest. A row is visible from the snapshot the lake assigned it, the same time in backtests and live trading.
+ */
+export function NewsSentiment(asset: AssetArg, measure: "Mean" | "NetCount" | "ArticleCount" = "Mean", lookbackDays: number = 1): Indicator {
+  const d: Record<string, unknown> = { type: "NewsSentiment" };
+  setAsset(d, "targetAsset", asset);
+  d["measure"] = measure;
+  d["lookbackDays"] = lookbackDays;
+  return d as unknown as Indicator;
+}
+/**
  * NewTradingWeek indicator.
  */
 export function NewTradingWeek(): Indicator {
@@ -2656,8 +2669,10 @@ export interface BacktestConfig {
   startDate: string;
   /** Backtest end date (ISO format, e.g. 2024-12-31). Minute allows up to 730 days of minute data from start_date, counting minute-indicator warmup; never split a longer span into yearly Minute jobs. */
   endDate: string;
-  /** Benchmark for comparisonValue (buy-and-hold of this ticker). Defaults to SPY if omitted — use SPY only for broad equity/market strategies. For single-name options, set to that underlying (AAPL options → AAPL). For multi-name options books, run separate backtests with each material underlying as baseline (AAPL for AAPL sleeve, MSFT for MSFT), or equal-weight B&H of the traded universe — do not default to SPY. */
+  /** Legacy Stock benchmark shorthand for comparisonValue. Use baseline_asset with explicit Cryptocurrency type for crypto pairs; never provide both fields. When both fields are omitted, the single traded stock/option underlying is inferred, otherwise SPY. For single-name options use that underlying; compare multi-name books against a deliberately chosen benchmark. */
   baselineSymbol?: string;
+  /** Typed buy-and-hold benchmark for comparisonValue. Use {type:'Cryptocurrency',symbol:'BTC-USD',name:'BTC-USD'} for BTC or {type:'Stock',symbol:'SPY',name:'SPY'} for a stock/ETF. Symbol text never determines asset type. Omit baseline_symbol when using this field. */
+  baselineAsset?: Record<string, unknown>;
   /** Time interval: Day or Minute (default Day). Minute is a daytrade tape. 730 days of minute data (selected range plus warmup) is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year or two is a normal second backtest, not an escalation. */
   interval?: "Day" | "Minute";
   /** Starting portfolio value (default 10000) Range 1..inf. */
@@ -2771,6 +2786,7 @@ export const backtest = (
     "start_date": config.startDate,
     "end_date": config.endDate,
     "baseline_symbol": config.baselineSymbol,
+    "baseline_asset": config.baselineAsset,
     "interval": config.interval,
     "initial_value": config.initialValue,
     "generate_events": config.generateEvents,
