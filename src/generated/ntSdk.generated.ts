@@ -2679,6 +2679,8 @@ export interface BacktestConfig {
   initialValue?: number;
   /** Generate detailed event data (signals, orders, audits) during backtest. Costs 5x research tokens. Events are Mongo hot-store traces retained for 3 days. Use query_backtest_events to explore them while retained. */
   generateEvents?: boolean;
+  /** Create and execute a fresh backtest instead of reusing a prior identical result. Defaults to false. Requires portfolio_id. Use for an explicitly requested rerun or warm-cache timing; this reruns the simulation and incurs the normal backtest cost. */
+  forceNewRun?: boolean;
   /** Optional fee contract keyed by AssetTypeEnum (Stock/Cryptocurrency/Option) with {amount, type: percent|dollars}. Omit for shared defaults (Option $0.65/contract). For replay of an optimizer/walk-forward study, pass that study's persisted feeConfig. OptionSlippageFraction is supported: 0 fills at quote mid, 1 at ask for buys/bid for sells; omitted uses the engine default 0.5. Fills require a current executable quote; this does not enable last-trade fallback pricing. */
   feeConfig?: FeeConfig;
   /** Overrides the portfolio's dividend policy for this run only. Omit to use the portfolio's own setting (cash unless it was set to reinvest). "reinvest" buys more of the paying stock on each pay date, which is what a buy-and-hold comparison against the SPY total-return baseline needs. */
@@ -2790,6 +2792,7 @@ export const backtest = (
     "interval": config.interval,
     "initial_value": config.initialValue,
     "generate_events": config.generateEvents,
+    "force_new_run": config.forceNewRun,
     "fee_config": config.feeConfig,
     "dividend_policy": config.dividendPolicy,
   }),
