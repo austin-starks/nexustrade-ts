@@ -453,6 +453,7 @@ export type Period = "Year" | "Quarter" | "Month";
 export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
+export type Measure = "Mean" | "Median" | "NetCount" | "ArticleCount";
 export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
 export type Instrument = "Equity" | "Call" | "Put";
 export type Instrument2 = "Equity" | "Option";
@@ -1590,6 +1591,19 @@ export function IndicatorWindowAgo(operand: Indicator, length: number, interval:
   return d as unknown as Indicator;
 }
 /**
+ * News sentiment about an industry over its last lookbackDays daily news snapshots (default 1, the latest). industry is one of the canonical industry tags (the same list IsIndustry uses). Headlines come from the GDELT global news feed, and a fine-tuned model scores every headline that mentions the industry: whether it is really about the industry, and whether it is positive, neutral or negative news for it (a headline it calls neutral scores 0; others score from -1.0 to 1.0). Each trading day has one snapshot at 09:15 New York, and a headline counts toward the first session whose 09:15 cutoff is at or after the time GDELT published it. Backtests and live trading read the same rows. lookbackDays counts trading sessions whether or not the industry had news in them; a single session is noisy, and about 20 sessions is the usual window for a sentiment rule. Only headlines the model judges to be about the industry count, and copies of one story within 7 days count once per session. measure (default Mean): Mean is the average sentiment from -1.0 to 1.0, Median is the middle score (the average of the two middle scores for an even count), NetCount is positive minus negative headlines, ArticleCount is the number of qualifying headlines. Every measure has no value when the window cannot be read in full: before coverage begins on 2019-09-23, across sessions with no published snapshot, or when the latest snapshot due has not been published. Mean and Median also have no value when the window holds no qualifying headline; the counts are then 0. The value is the same for every asset: it takes no target asset.
+ * @param industry Canonical industry tag whose news to read, as IsIndustry lists it. Legacy aliases are separate news series and are rejected, never mapped.
+ * @param measure Median: middle score from -1 to 1 (the average of the two middle scores for an even count), with no value when no qualifying headline. Mean: average sentiment from -1 to 1, with no value when the window has no qualifying headline. NetCount: positive minus negative headlines. ArticleCount: qualifying headlines. Every measure has no value before coverage begins on 2019-09-23, across missing snapshots, or when the due snapshot is unpublished.
+ * @param lookbackDays Whole trading sessions of daily 09:15 New York news snapshots; 1 is the latest and about 20 is the usual window. The same value for every asset.
+ */
+export function IndustryNewsSentiment(industry: "technology" | "financialServices" | "healthcare" | "energy" | "consumerGoods" | "entertainmentAndMedia" | "manufacturing" | "transportation" | "realEstate" | "utilities" | "agriculture" | "education" | "retail" | "artificialIntelligence" | "aiInfrastructure" | "analytics" | "cloudComputing" | "dataCenter" | "database" | "cybersecurity" | "developerTools" | "software" | "saas" | "enterpriseSoftware" | "customerExperienceSoftware" | "productivityTools" | "collaborationSoftware" | "digitalSignatureAndAuthentication" | "hardware" | "consumerElectronics" | "networking" | "semiconductor" | "chipDesign" | "chipManufacturing" | "semiconductorEquipment" | "gpuAndAccelerators" | "memoryAndStorage" | "quantumComputing" | "robotics" | "industrialAutomation" | "iot" | "smartDevices" | "wearable" | "3dPrinting" | "augmentedReality" | "virtualReality" | "space" | "satellites" | "aerospace" | "defense" | "drones" | "financialInfrastructure" | "capitalMarketsTechnology" | "banking" | "assetManagement" | "brokerage" | "payments" | "fintech" | "insurance" | "autoInsurance" | "homeInsurance" | "lifeInsurance" | "healthInsurance" | "blockchain" | "cryptocurrency" | "biotechnology" | "pharmaceuticals" | "medicalDevices" | "digitalHealth" | "lifeSciencesSoftware" | "bioinformatics" | "computationalBiology" | "computationalDrugDiscovery" | "oncology" | "immunotherapy" | "vaccines" | "veterinary" | "oil" | "gas" | "oilfieldServices" | "cleanEnergy" | "renewableEnergy" | "solarEnergy" | "windEnergy" | "nuclearEnergy" | "hydrogen" | "batteryTechnology" | "miningAndNaturalResources" | "gold" | "silver" | "chemicals" | "advancedMaterials" | "waterInfrastructure" | "wasteManagementAndRecycling" | "forestry" | "construction" | "buildingMaterials" | "electricalAndGridInfrastructure" | "logisticsAndSupplyChain" | "airline" | "maritime" | "railroads" | "automotive" | "electricVehicle" | "autonomousTransportation" | "recreationalVehicle" | "cruise" | "rideShare" | "printing" | "packaging" | "householdProducts" | "ecommerce" | "digitalMarketplace" | "fashionAndApparel" | "luxuryGoods" | "jewelry" | "foodAndBeverage" | "foodDelivery" | "nutrition" | "petCare" | "outdoorAndRecreationalEquipment" | "sportsAndFitness" | "cannabis" | "hospitalityAndTravel" | "homeSecurity" | "advertising" | "gaming" | "gambling" | "sportsBetting" | "socialMedia" | "streaming" | "movies" | "musicAndAudio" | "publishing" | "telecommunications" | "edtech" | "proptech", measure: Measure = "Mean", lookbackDays: number = 1): Indicator {
+  const d: Record<string, unknown> = { type: "IndustryNewsSentiment" };
+  d["industry"] = industry;
+  d["measure"] = measure;
+  d["lookbackDays"] = lookbackDays;
+  return d as unknown as Indicator;
+}
+/**
  * InitialValue indicator.
  */
 export function InitialValue(): Indicator {
@@ -2032,7 +2046,7 @@ export function NewPoliticalDisclosure(memberId: string, instrument: Instrument2
  * @param measure Median: middle score from -1 to 1, with no value when no qualifying news. Mean: average sentiment from -1 to 1, with no value when the window has no qualifying news. NetCount: positive minus negative headlines. ArticleCount: qualifying headlines. Every measure has no value before coverage begins on 2019-09-23, across missing snapshots, or when the due snapshot is unpublished.
  * @param lookbackDays Whole trading sessions of daily 09:15 New York news snapshots; 1 is the latest. A row is visible from the snapshot the lake assigned it, the same time in backtests and live trading.
  */
-export function NewsSentiment(asset: AssetArg, measure: "Mean" | "Median" | "NetCount" | "ArticleCount" = "Mean", lookbackDays: number = 1): Indicator {
+export function NewsSentiment(asset: AssetArg, measure: Measure = "Mean", lookbackDays: number = 1): Indicator {
   const d: Record<string, unknown> = { type: "NewsSentiment" };
   setAsset(d, "targetAsset", asset);
   d["measure"] = measure;
