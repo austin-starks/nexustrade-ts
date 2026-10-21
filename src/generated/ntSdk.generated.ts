@@ -2977,6 +2977,14 @@ export const geneAllocationPct = (strategyIndex: number, values: number[]): Gene
   values: values as unknown[],
 });
 
+/** Sweep AllocationDollars (Action scope) over a value set. */
+export const geneAllocationDollars = (strategyIndex: number, values: number[]): Gene => ({
+  field: "AllocationDollars",
+  scope: "Action",
+  target: { scope: "Action", field: "AllocationDollars", strategyIndex },
+  values: values as unknown[],
+});
+
 /** Sweep TotalBudgetPct (Action scope) over a value set. */
 export const geneTotalBudgetPct = (strategyIndex: number, values: number[]): Gene => ({
   field: "TotalBudgetPct",
