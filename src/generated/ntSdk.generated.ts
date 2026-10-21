@@ -3074,10 +3074,10 @@ export const geneMaxSpreadPct = (strategyIndex: number, legIndex: number, values
 });
 
 /** Sweep SelectTopLimit (UniversePipeline scope) over a value set. */
-export const geneSelectTopLimit = (strategyIndex: number, stageIndex: number, values: number[]): Gene => ({
+export const geneSelectTopLimit = (strategyIndex: number, values: number[], sleeveName?: string): Gene => ({
   field: "SelectTopLimit",
   scope: "UniversePipeline",
-  target: { scope: "UniversePipeline", field: "SelectTopLimit", strategyIndex, stageIndex },
+  target: { scope: "UniversePipeline", field: "SelectTopLimit", strategyIndex, ...(sleeveName === undefined ? {} : { sleeveName }) },
   values: values as unknown[],
 });
 
@@ -3086,5 +3086,13 @@ export const geneUniversePipelineFilter = (strategyIndex: number, stageIndex: nu
   field: "UniversePipelineFilter",
   scope: "UniversePipeline",
   target: { scope: "UniversePipeline", field: "UniversePipelineFilter", strategyIndex, stageIndex },
+  values: values as unknown[],
+});
+
+/** Sweep UniversePipelineFilter (UniversePipeline scope) by adding a Filter stage to a pipeline that has none to replace. The stage goes ahead of the first SelectTop/SelectPercentile, so it narrows the universe before ranking. */
+export const geneAppendUniversePipelineFilter = (strategyIndex: number, values: { label: string; condition: Condition }[], sleeveName?: string): Gene => ({
+  field: "UniversePipelineFilter",
+  scope: "UniversePipeline",
+  target: { scope: "UniversePipeline", field: "UniversePipelineFilter", strategyIndex, ...(sleeveName === undefined ? {} : { sleeveName }), append: true },
   values: values as unknown[],
 });
