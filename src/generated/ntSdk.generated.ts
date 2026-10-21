@@ -15,13 +15,29 @@ export type PortfolioWide = { readonly __portfolioWide: true };
 export type AssetArg = Asset | Candidate | PortfolioWide;
 
 /**
- * Opaque: indicators are only ever constructed through the builders below.
- * Candidate* brands use a unique symbol (not a string key) so they are not
- * defeated by the `[key: string]: unknown` index signature — strategy() can
- * reject candidate-bound gates while filter()/eligibility still accept them.
+ * Opaque: indicators and conditions are only ever constructed through the
+ * builders below. Brands use unique symbols (not string keys) so they are not
+ * defeated by the `[key: string]: unknown` index signature.
+ *
+ * nodeKind keeps the two nominally distinct. Without it both interfaces are the
+ * same structure, so a bare `IsIndustry(CANDIDATE, "technology")` inside
+ * `and(...)` (or cast `as CandidateCondition`) typechecked and only failed at
+ * save time. The literal values are the text the typecheck error shows.
+ *
+ * candidateBound lets strategy() reject candidate-bound gates while
+ * filter()/eligibility still accept them.
  */
-export interface Indicator { type: string; [key: string]: unknown }
-export interface Condition { type: string; [key: string]: unknown }
+declare const nodeKind: unique symbol;
+export interface Indicator {
+  type: string;
+  readonly [nodeKind]: "Indicator (a number, not a condition): compare it to get a condition, e.g. gt(IsIndustry(CANDIDATE, 'technology'), Value(0)) or lt(RSI(CANDIDATE, 14), Value(30))";
+  [key: string]: unknown;
+}
+export interface Condition {
+  type: string;
+  readonly [nodeKind]: "Condition (true/false, not an indicator)";
+  [key: string]: unknown;
+}
 declare const candidateBound: unique symbol;
 /** Indicator bound to the pipeline candidate (Price(CANDIDATE), …). */
 export type CandidateIndicator = Indicator & { readonly [candidateBound]: true };
@@ -581,7 +597,8 @@ function compact<T extends object>(obj: T): T {
 
 function compare(lhs: Indicator, rhs: Indicator | number, comparison: Comparator): Condition {
   const right = typeof rhs === "number" ? Value(rhs) : rhs;
-  return { type: "Base", lhs, comparison, rhs: right };
+  // Wire nodes carry no brand at runtime; nodeKind exists only in the types.
+  return { type: "Base", lhs, comparison, rhs: right } as unknown as Condition;
 }
 
 export const gt = (l: Indicator, r: Indicator | number): Condition => compare(l, r, "greaterThan");
@@ -591,24 +608,24 @@ export const lte = (l: Indicator, r: Indicator | number): Condition => compare(l
 export const eq = (l: Indicator, r: Indicator | number): Condition => compare(l, r, "equal");
 export const neq = (l: Indicator, r: Indicator | number): Condition => compare(l, r, "notEqual");
 
-export const and = (...conditions: Condition[]): Condition => ({ type: "And", conditions });
-export const or = (...conditions: Condition[]): Condition => ({ type: "Or", conditions });
+export const and = (...conditions: Condition[]): Condition => ({ type: "And", conditions } as unknown as Condition);
+export const or = (...conditions: Condition[]): Condition => ({ type: "Or", conditions } as unknown as Condition);
 /** Multi: true when at least `count` of `conditions` hold. */
 export const atLeast = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "greaterThanOrEqual", value: count, conditions });
+  ({ type: "Multi", comparison: "greaterThanOrEqual", value: count, conditions } as unknown as Condition);
 /** Multi: true when at most `count` of `conditions` hold. */
 export const atMost = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "lessThanOrEqual", value: count, conditions });
+  ({ type: "Multi", comparison: "lessThanOrEqual", value: count, conditions } as unknown as Condition);
 /** Multi: true when fewer than `count` of `conditions` hold. */
 export const fewerThan = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "lessThan", value: count, conditions });
+  ({ type: "Multi", comparison: "lessThan", value: count, conditions } as unknown as Condition);
 /** Multi: true when exactly `count` of `conditions` hold. */
 export const exactly = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "equal", value: count, conditions });
+  ({ type: "Multi", comparison: "equal", value: count, conditions } as unknown as Condition);
 /** Multi with an explicit Comparator (same wire shape as YAML Multi). */
 export const multi = (
   count: number, comparison: Comparator, ...conditions: Condition[]
-): Condition => ({ type: "Multi", comparison, value: count, conditions });
+): Condition => ({ type: "Multi", comparison, value: count, conditions } as unknown as Condition);
 /**
  * Sequence. `andThen(30, "Minute", A, B)` is true at tick t when B is true at t
  * and A was true at some STRICTLY EARLIER tick in the preceding 30 minutes.
@@ -628,7 +645,7 @@ export const multi = (
  */
 export const andThen = (
   length: number, interval: Interval, ...conditions: Condition[]
-): Condition => ({ type: "Then", conditions, window: { length, interval } });
+): Condition => ({ type: "Then", conditions, window: { length, interval } } as unknown as Condition);
 /** Always-true gate for strategies whose cadence lives in the pipeline. */
 export const always = (): Condition => compare(Value(1), Value(0), "greaterThan");
 
@@ -684,7 +701,7 @@ export const volatilityTarget = (
 
 const rebalanceDecisionMetric = (
   metric: "allocationDrift" | "plannedTurnover" | "estimatedCost" | "expectedBenefit" | "netBenefit",
-): Indicator => ({ type: "RebalanceDecisionMetric", metric });
+): Indicator => ({ type: "RebalanceDecisionMetric", metric } as unknown as Indicator);
 export const RebalanceAllocationDrift = (): Indicator =>
   rebalanceDecisionMetric("allocationDrift");
 export const RebalancePlannedTurnover = (): Indicator =>
