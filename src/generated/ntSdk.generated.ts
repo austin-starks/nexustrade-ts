@@ -391,6 +391,8 @@ export interface Strategy {
   active?: boolean;
   /** Omitted means Market. Limit always requires an explicit price policy. */
   orderExecution?: StrategyOrderExecutionPolicy;
+  /** Backtest-only exit priority. CancelConflictingBuys cannot deploy to paper/live trading. */
+  pendingOrderPolicy?: "Wait" | "CancelConflictingBuys";
 }
 export interface AuthoredIndustryFilter {
   mode: "ALL" | "INCLUDE_ONLY"; match: "ANY" | "ALL"; industries: readonly string[];
@@ -951,7 +953,7 @@ export const goodForMinutes = (minutes: number): StrategyLimitWorkingTime => ({
 
 export const strategy = (
   name: string, condition: StrategyCondition, action: Action,
-  options: { active?: boolean; orderExecution?: StrategyOrderExecutionPolicy } = {},
+  options: { active?: boolean; orderExecution?: StrategyOrderExecutionPolicy; pendingOrderPolicy?: Strategy["pendingOrderPolicy"] } = {},
 ): Strategy => compact({
   name,
   condition,
