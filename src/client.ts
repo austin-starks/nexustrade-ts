@@ -1200,8 +1200,25 @@ export async function waitForOperation(
 
   const deadline = Date.now() + timeoutSeconds * 1000;
   let interval = Math.min(pollIntervalSeconds, maxPollIntervalSeconds);
+  let consecutiveErrors = 0;
   for (;;) {
-    const operation = await fetch(operationId);
+    let operation: JsonObject;
+    try {
+      operation = await fetch(operationId);
+    } catch (error) {
+      if (!(error instanceof NexusTradeApiError)) throw error;
+      consecutiveErrors += 1;
+      const transient = error.code === "transport_error" ||
+        error.status === 408 || error.status === 429 || error.status >= 500;
+      const remainingMs = deadline - Date.now();
+      if (!transient || consecutiveErrors >= 3 || remainingMs <= 0) {
+        throw new NexusTradeApiError(error.status, error.code, error.message, operationId);
+      }
+      await new Promise(resolve => setTimeout(resolve, Math.min(Math.max(1, interval) * 1000, remainingMs)));
+      interval = Math.min(Math.max(1, interval) * POLL_BACKOFF_FACTOR, Math.max(1, maxPollIntervalSeconds));
+      continue;
+    }
+    consecutiveErrors = 0;
     const status = String(operation.status ?? "");
     if (TERMINAL_STATUSES.includes(status)) {
       if (raiseOnFailure && status !== "completed") {
@@ -2433,7 +2450,8 @@ export class NexusTradeClient {
     queryId: string,
     options: WaitOptions = {}
   ): Promise<JsonObject> {
-    return waitForOperation((id) => this.getLakeQuery(id), queryId, options);
+    return waitForOperation((id) => this.getLakeQuery(id), queryId,
+      { ...options, timeoutSeconds: options.timeoutSeconds ?? 1200 });
   }
 
   /** Resolve once a backtest is terminal. See `waitForOperation`. */

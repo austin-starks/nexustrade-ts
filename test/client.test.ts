@@ -484,6 +484,34 @@ describe("operation waiter", () => {
       /timeoutSeconds must be positive/
     );
   });
+
+  it("recovers a transient poll by reading the same operation", async () => {
+    const calls: string[] = [];
+    const client = new NexusTradeClient({ transport: {
+      async request(method, path): Promise<JsonObject> {
+        calls.push(`${method} ${path}`);
+        if (calls.length === 1) throw new NexusTradeApiError(503, "service_unavailable", "temporary");
+        return { operation: { id: "lq-1", status: "completed" } };
+      },
+    } });
+    const result = await client.waitForLakeQuery("lq-1", { pollIntervalSeconds: 0 });
+    assert.equal(result.status, "completed");
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(call => call === calls[0] && call.startsWith("GET ")));
+  });
+
+  it("does not retry authentication failures", async () => {
+    let calls = 0;
+    const client = new NexusTradeClient({ transport: {
+      async request(): Promise<JsonObject> { calls++; throw new NexusTradeApiError(401, "invalid_token", "expired"); },
+    } });
+    await assert.rejects(() => client.waitForLakeQuery("lq-1"), (error: unknown) => {
+      assert.ok(error instanceof NexusTradeApiError);
+      assert.equal(error.operationId, "lq-1");
+      return true;
+    });
+    assert.equal(calls, 1);
+  });
 });
 
 class UploadingTransport extends FakeTransport {

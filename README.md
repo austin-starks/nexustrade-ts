@@ -236,6 +236,11 @@ price target. Live option strategies must choose an explicit Limit policy.
 
 ### Option selection and execution limits
 
+`strategy(..., { pendingOrderPolicy: "CancelConflictingBuys" })` enables backtest-only
+exit priority over conflicting pending buys. Omission preserves waiting. Paper
+and live deployment reject this opt-in because broker cancellation acknowledgements
+are not implemented. The setting also accepts explicit `"Wait"`.
+
 Builders describe drafts. Typechecking does not prove that the engine can
 execute every requested rule; the API validates complete portfolios and their
 conditions.
@@ -335,6 +340,15 @@ const finished = await client.waitForBacktest(operation.id as string);
 
 A timeout throws `operation_timeout` and does **not** cancel the job — call the
 waiter again with the same id rather than resubmitting.
+
+Transient network and HTTP 408/429/5xx polling failures retry the same operation
+at most twice consecutively, within the wait deadline. Persistent failures keep
+their original error code and operation ID; no new job is submitted.
+
+Durable lake exports use a 900-second server budget by default (registered API
+keys may request up to 1800 seconds). `waitForLakeQuery` defaults to 1200 seconds
+to include queue time. Compute token budgets remain 90 seconds by default and
+180 seconds maximum. A client wait timeout does not extend the server budget.
 
 **Batches.** `createBacktests` submits many in one request and returns one
 operation each; `waitForBacktests(operations)` waits on all of them. Prefer it
