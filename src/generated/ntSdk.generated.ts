@@ -2779,7 +2779,7 @@ export interface BacktestConfig {
   baselineSymbol?: string;
   /** Typed buy-and-hold benchmark for comparisonValue. Use {type:'Cryptocurrency',symbol:'BTC-USD',name:'BTC-USD'} for BTC or {type:'Stock',symbol:'SPY',name:'SPY'} for a stock/ETF. Symbol text never determines asset type. Omit baseline_symbol when using this field. */
   baselineAsset?: Record<string, unknown>;
-  /** Time interval: Day or Minute (default Day). Minute is a daytrade tape. 730 days of minute data (selected range plus warmup) is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year or two is a normal second backtest, not an escalation. */
+  /** Time interval: Day or Minute (default Day). Day uses fixed OHLC decision/fill snapshots and overrides the portfolio deployment frequency, openDelayMinutes, closeLeadMinutes and intervalSeconds. Use Minute when the authored intraday schedule matters. Minute is a daytrade tape. 730 days of minute data (selected range plus warmup) is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year or two is a normal second backtest, not an escalation. */
   interval?: "Day" | "Minute";
   /** Starting portfolio value (default 10000) Range 1..inf. */
   initialValue?: number;
@@ -2789,7 +2789,7 @@ export interface BacktestConfig {
   forceNewRun?: boolean;
   /** Optional fee contract keyed by AssetTypeEnum (Stock/Cryptocurrency/Option) with {amount, type: percent|dollars}. Omit for shared defaults (Option $0.65/contract). For replay of an optimizer/walk-forward study, pass that study's persisted feeConfig. OptionSlippageFraction is supported: 0 fills at quote mid, 1 at ask for buys/bid for sells; omitted uses the engine default 0.5. Fills require a current executable quote; this does not enable last-trade fallback pricing. */
   feeConfig?: FeeConfig;
-  /** Overrides the portfolio's dividend policy for this run only. Omit to use the portfolio's own setting (cash unless it was set to reinvest). "reinvest" buys more of the paying stock on each pay date, which is what a buy-and-hold comparison against the SPY total-return baseline needs. */
+  /** Overrides the portfolio's dividend policy for this run only. Omit to use the portfolio's own setting (cash unless it was set to reinvest). "reinvest" buys more of the paying stock on each pay date while that stock is still held. A fully exited position receives its locked dividend entitlement as cash without reopening the position. Reinvest is what a buy-and-hold comparison against the SPY total-return baseline needs. */
   dividendPolicy?: "cash" | "reinvest";
 }
 export interface WalkForwardConfig {
