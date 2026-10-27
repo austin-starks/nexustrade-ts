@@ -205,8 +205,9 @@ export type CloseOptionTrigger =
       minSpreadTheta?: number; maxSpreadTheta?: number;
     };
 
-export type ExecutionPriority = "ProtectiveExit" | "SafetyTrim" | "Increase" | "Funding" | "Entry";
+export type ExecutionPriority = number;
 export interface PurchaseFunding {
+  executionPriority?: number;
   condition: Condition; rankBy: Indicator; direction: SelectDirection; amount: Allocation;
 }
 export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amount: Allocation;
@@ -414,7 +415,7 @@ export interface Strategy {
   /** Omitted means Market. Limit always requires an explicit price policy. */
   orderExecution?: StrategyOrderExecutionPolicy;
   /** Backtest-only exit priority. CancelConflictingBuys cannot deploy to paper/live trading. */
-  pendingOrderPolicy?: "Wait" | "CancelConflictingBuys";
+  pendingOrderPolicy?: "Wait" | "WaitForTarget" | "CancelConflictingBuys";
 }
 export interface AuthoredIndustryFilter {
   mode: "ALL" | "INCLUDE_ONLY"; match: "ANY" | "ALL"; industries: readonly string[];
@@ -1042,6 +1043,13 @@ export const portfolio = (
 export function AbsoluteValue(operand: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "AbsoluteValue" };
   d.indicators = [operand];
+  return d as unknown as Indicator;
+}
+/**
+ * AccountValue indicator.
+ */
+export function AccountValue(): Indicator {
+  const d: Record<string, unknown> = { type: "AccountValue" };
   return d as unknown as Indicator;
 }
 /**
