@@ -107,7 +107,9 @@ export interface ReplaceStrategiesOperation {
 /** Complete finished authored patch; omitted fields retain their saved values. */
 export interface UpdatePortfolioOperation {
   type: "updatePortfolio";
-  portfolio: Partial<Pick<Portfolio, "name" | "initialValue" | "strategies" | "deployment" | "policy" | "dividendPolicy" | "alertsEnabled" | "supportsFractionalShares" | "supportsCrypto">>;
+  portfolio: Partial<Pick<Portfolio, "name" | "initialValue" | "strategies" | "deployment" | "policy" | "dividendPolicy" | "alertsEnabled" | "supportsFractionalShares" | "supportsCrypto">> & {
+    cashSettlement?:Portfolio["cashSettlement"]|null;
+  };
 }
 
 /** All operations in one call for this portfolio are validated and saved atomically. */

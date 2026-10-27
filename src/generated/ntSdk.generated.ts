@@ -205,7 +205,13 @@ export type CloseOptionTrigger =
       minSpreadTheta?: number; maxSpreadTheta?: number;
     };
 
-export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amount: Allocation }
+export type ExecutionPriority = "ProtectiveExit" | "SafetyTrim" | "Increase" | "Funding" | "Entry";
+export interface PurchaseFunding {
+  condition: Condition; rankBy: Indicator; direction: SelectDirection; amount: Allocation;
+}
+export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amount: Allocation;
+  executionPriority?:ExecutionPriority; funding?:PurchaseFunding; holdingCondition?:Condition;
+}
 export interface DepositOrWithdrawAction { type: "Deposit" | "Withdraw"; amount: DepositWithdrawAllocation }
 export interface AlertAction { type: "Alert"; message: string }
 /**
@@ -442,6 +448,8 @@ export interface Portfolio {
   alertsEnabled?: boolean;
   /** "cash" (default when omitted) or "reinvest" into the paying stock. */
   dividendPolicy?: DividendPolicy;
+    /** Cash-only T+1 proceeds. Missing live cash-cap evidence blocks purchases. */
+    cashSettlement?: "T1" | null;
   policy?: AuthoredPortfolioPolicy;
   deployment?: AuthoredDeploymentTiming;
 }
@@ -471,6 +479,7 @@ export type Period = "Year" | "Quarter" | "Month";
 export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
+export type Clock = "Calendar" | "Trading";
 export type Measure = "Mean" | "Median" | "NetCount" | "ArticleCount";
 export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
 export type Instrument = "Equity" | "Call" | "Put";
@@ -740,12 +749,18 @@ export const watchlistUniverse = (watchlistKey: string): Universe => ({ source: 
 
 export const buy = (
   target: AssetArg, amount: number, type: AllocationType = "percent of portfolio",
+  options: {executionPriority?:ExecutionPriority;funding?:PurchaseFunding} = {},
 ): BuyOrSellAction =>
-  ({ type: "Buy", targetAsset: toAsset(target), amount: { type, amount } });
+  ({ type: "Buy", targetAsset: toAsset(target), amount: { type, amount },...options });
 export const sell = (
   target: AssetArg, amount: number, type: AllocationType = "percent of portfolio",
+  options: {executionPriority?:ExecutionPriority} = {},
 ): BuyOrSellAction =>
-  ({ type: "Sell", targetAsset: toAsset(target), amount: { type, amount } });
+  ({ type: "Sell", targetAsset: toAsset(target), amount: { type, amount },...options });
+/** Sell only actual holdings that pass a candidate-bound condition. */
+export const sellHoldings = (condition:Condition,amount=100,type:AllocationType="percent of current positions",
+  options:{executionPriority?:ExecutionPriority}={}):BuyOrSellAction=>({type:"Sell",targetAsset:stockAsset("__PLACEHOLDER__"),
+    holdingCondition:condition,amount:{type,amount},...options});
 export const alert = (message: string): AlertAction => ({ type: "Alert", message });
 export const launchAgent = (config: {
   planningModel: string; executionModel: string; initialMessage: string;
@@ -1003,6 +1018,8 @@ export const portfolio = (
     initialValue?: number; main?: boolean;
     supportsFractionalShares?: boolean; supportsCrypto?: boolean; alertsEnabled?: boolean;
     dividendPolicy?: DividendPolicy;
+    /** Cash-only T+1 proceeds. Missing live cash-cap evidence blocks purchases. */
+    cashSettlement?: "T1" | null;
     policy?: AuthoredPortfolioPolicy;
     deployment?: AuthoredDeploymentTiming;
   } = {},
@@ -1125,7 +1142,7 @@ export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval:
  * @param offsetBars Skip this many latest completed candles. 1 selects the previous window.
  * @param minutePolicy strict requires every minute. observed aggregates actual eligible-trade prints, skips empty candles, and publishes after the clock bucket closes. No synthetic prices; source coverage is a separate check.
  */
-export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" | "high" | "low" | "close" | "sma" = "close", bars: number = 1, offsetBars: number = 0, minutePolicy: "strict" | "observed" = "strict"): Indicator {
+export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" | "high" | "low" | "close" | "sma" | "endTime" = "close", bars: number = 1, offsetBars: number = 0, minutePolicy: "strict" | "observed" = "strict"): Indicator {
   const d: Record<string, unknown> = { type: "ChartBar" };
   setAsset(d, "targetAsset", asset);
   d["barMinutes"] = barMinutes;
@@ -1193,10 +1210,12 @@ export function ConsecutiveIncrease(indicator: Indicator, period: Period, lookba
  * @param condition Condition evaluated over the window.
  * @param length Length of time
  * @param interval Unit of time
+ * @param checkCadenceMinutes Optional. Counts completed regular-session checks instead of elapsed time. Window length is the required count; resets each session. Missing checks reset the count.
  */
-export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "Day"): Indicator {
+export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "Day", checkCadenceMinutes?: number): Indicator {
   const d: Record<string, unknown> = { type: "ConsecutiveTrue" };
   d.condition = condition;
+  if (checkCadenceMinutes !== undefined) d["checkCadenceMinutes"] = checkCadenceMinutes;
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
@@ -1520,16 +1539,31 @@ export function Index(metric: "VIX" | "SPX" | "NDX" | "DJI" | "RUT" | "SKEW" | "
   return d as unknown as Indicator;
 }
 /**
+ * IndicatorAtCondition indicator.
+ * @param condition Condition evaluated over the window.
+ */
+export function IndicatorAtCondition(operand: Indicator, condition: Condition, selection: "First" | "Latest" | "Maximum" | "Minimum" = "First", clock: Clock = "Calendar", initialValue?: number, length?: number, interval?: "Minute" | "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "IndicatorAtCondition" };
+  d.condition = condition;
+  d["selection"] = selection;
+  d["clock"] = clock;
+  if (initialValue !== undefined) d["initialValue"] = initialValue;
+  d.indicators = [operand];
+  if (length !== undefined || interval !== undefined) d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * IndicatorAtEntry indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param side The side of the fill the value is anchored to
  * @param orderStatus Matches order events with this status
  */
-export function IndicatorAtEntry(operand: Indicator, asset: AssetArg, side: Side, orderStatus: OrderStatus = "Filled"): Indicator {
+export function IndicatorAtEntry(operand: Indicator, asset: AssetArg, side: Side, orderStatus: OrderStatus = "Filled", anchor: "LatestFill" | "HoldingEntry" = "LatestFill"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorAtEntry" };
   setAsset(d, "targetAsset", asset);
   d["side"] = side;
   d["orderStatus"] = orderStatus;
+  d["anchor"] = anchor;
   d.indicators = [operand];
   return d as unknown as Indicator;
 }
@@ -1603,8 +1637,10 @@ export function IndicatorStandardDeviation(operand: Indicator, length: number = 
  * @param length Length of time
  * @param interval Unit of time
  */
-export function IndicatorWindowAgo(operand: Indicator, length: number, interval: Interval): Indicator {
+export function IndicatorWindowAgo(operand: Indicator, length: number, interval: Interval, sampling?: "Calendar" | "Observation" | "Session", initialValue?: number): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorWindowAgo" };
+  if (sampling !== undefined) d["sampling"] = sampling;
+  if (initialValue !== undefined) d["initialValue"] = initialValue;
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
@@ -1951,12 +1987,14 @@ export function MinutesSinceOptionOrder(underlying: string, optionType: OptionTy
  * MinutesSinceOrder indicator.
  * @param assets Ticker(s) whose orders are counted. One string or an array.
  * @param side Buy or Sell
+ * @param clock Optional elapsed-time clock; omitted retains calendar minutes.
  */
-export function MinutesSinceOrder(assets: AssetArg | AssetArg[], side: Side, orderStatus: OrderStatus = "Filled"): Indicator {
+export function MinutesSinceOrder(assets: AssetArg | AssetArg[], side: Side, orderStatus: OrderStatus = "Filled", clock?: Clock): Indicator {
   const d: Record<string, unknown> = { type: "MinutesSinceOrder" };
   setAssets(d, "targetAssets", assets);
   d["side"] = side;
   d["orderStatus"] = orderStatus;
+  if (clock !== undefined) d["clock"] = clock;
   return d as unknown as Indicator;
 }
 /**
@@ -2357,6 +2395,15 @@ export function PortfolioValue(): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * PositionEntryPrice indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function PositionEntryPrice(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "PositionEntryPrice" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
  * PositionMaxDrawdown indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  */
@@ -2371,6 +2418,24 @@ export function PositionMaxDrawdown(asset: AssetArg): Indicator {
  */
 export function PositionMaxDrawup(asset: AssetArg): Indicator {
   const d: Record<string, unknown> = { type: "PositionMaxDrawup" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * PositionMinutesSinceHigh indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function PositionMinutesSinceHigh(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "PositionMinutesSinceHigh" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * PositionPeakPrice indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function PositionPeakPrice(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "PositionPeakPrice" };
   setAsset(d, "targetAsset", asset);
   return d as unknown as Indicator;
 }
