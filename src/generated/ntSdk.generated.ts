@@ -15,13 +15,29 @@ export type PortfolioWide = { readonly __portfolioWide: true };
 export type AssetArg = Asset | Candidate | PortfolioWide;
 
 /**
- * Opaque: indicators are only ever constructed through the builders below.
- * Candidate* brands use a unique symbol (not a string key) so they are not
- * defeated by the `[key: string]: unknown` index signature — strategy() can
- * reject candidate-bound gates while filter()/eligibility still accept them.
+ * Opaque: indicators and conditions are only ever constructed through the
+ * builders below. Brands use unique symbols (not string keys) so they are not
+ * defeated by the `[key: string]: unknown` index signature.
+ *
+ * nodeKind keeps the two nominally distinct. Without it both interfaces are the
+ * same structure, so a bare `IsIndustry(CANDIDATE, "technology")` inside
+ * `and(...)` (or cast `as CandidateCondition`) typechecked and only failed at
+ * save time. The literal values are the text the typecheck error shows.
+ *
+ * candidateBound lets strategy() reject candidate-bound gates while
+ * filter()/eligibility still accept them.
  */
-export interface Indicator { type: string; [key: string]: unknown }
-export interface Condition { type: string; [key: string]: unknown }
+declare const nodeKind: unique symbol;
+export interface Indicator {
+  type: string;
+  readonly [nodeKind]: "Indicator (a number, not a condition): compare it to get a condition, e.g. gt(IsIndustry(CANDIDATE, 'technology'), Value(0)) or lt(RSI(CANDIDATE, 14), Value(30))";
+  [key: string]: unknown;
+}
+export interface Condition {
+  type: string;
+  readonly [nodeKind]: "Condition (true/false, not an indicator)";
+  [key: string]: unknown;
+}
 declare const candidateBound: unique symbol;
 /** Indicator bound to the pipeline candidate (Price(CANDIDATE), …). */
 export type CandidateIndicator = Indicator & { readonly [candidateBound]: true };
@@ -189,7 +205,14 @@ export type CloseOptionTrigger =
       minSpreadTheta?: number; maxSpreadTheta?: number;
     };
 
-export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amount: Allocation }
+export type ExecutionPriority = number;
+export interface PurchaseFunding {
+  executionPriority?: number;
+  condition: Condition; rankBy: Indicator; direction: SelectDirection; amount: Allocation;
+}
+export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amount: Allocation;
+  executionPriority?:ExecutionPriority; funding?:PurchaseFunding; holdingCondition?:Condition;
+}
 export interface DepositOrWithdrawAction { type: "Deposit" | "Withdraw"; amount: DepositWithdrawAllocation }
 export interface AlertAction { type: "Alert"; message: string }
 /**
@@ -392,7 +415,7 @@ export interface Strategy {
   /** Omitted means Market. Limit always requires an explicit price policy. */
   orderExecution?: StrategyOrderExecutionPolicy;
   /** Backtest-only exit priority. CancelConflictingBuys cannot deploy to paper/live trading. */
-  pendingOrderPolicy?: "Wait" | "CancelConflictingBuys";
+  pendingOrderPolicy?: "Wait" | "WaitForTarget" | "CancelConflictingBuys";
 }
 export interface AuthoredIndustryFilter {
   mode: "ALL" | "INCLUDE_ONLY"; match: "ANY" | "ALL"; industries: readonly string[];
@@ -426,6 +449,8 @@ export interface Portfolio {
   alertsEnabled?: boolean;
   /** "cash" (default when omitted) or "reinvest" into the paying stock. */
   dividendPolicy?: DividendPolicy;
+    /** Cash-only T+1 proceeds. Missing live cash-cap evidence blocks purchases. */
+    cashSettlement?: "T1" | null;
   policy?: AuthoredPortfolioPolicy;
   deployment?: AuthoredDeploymentTiming;
 }
@@ -455,6 +480,7 @@ export type Period = "Year" | "Quarter" | "Month";
 export type PositionEffect = "open" | "close";
 export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Canceled" | "Filled" | "Partially Filled";
 export type Side = "Buy" | "Sell";
+export type Clock = "Calendar" | "Trading";
 export type Measure = "Mean" | "Median" | "NetCount" | "ArticleCount";
 export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
 export type Instrument = "Equity" | "Call" | "Put";
@@ -583,7 +609,8 @@ function compact<T extends object>(obj: T): T {
 
 function compare(lhs: Indicator, rhs: Indicator | number, comparison: Comparator): Condition {
   const right = typeof rhs === "number" ? Value(rhs) : rhs;
-  return { type: "Base", lhs, comparison, rhs: right };
+  // Wire nodes carry no brand at runtime; nodeKind exists only in the types.
+  return { type: "Base", lhs, comparison, rhs: right } as unknown as Condition;
 }
 
 export const gt = (l: Indicator, r: Indicator | number): Condition => compare(l, r, "greaterThan");
@@ -593,24 +620,24 @@ export const lte = (l: Indicator, r: Indicator | number): Condition => compare(l
 export const eq = (l: Indicator, r: Indicator | number): Condition => compare(l, r, "equal");
 export const neq = (l: Indicator, r: Indicator | number): Condition => compare(l, r, "notEqual");
 
-export const and = (...conditions: Condition[]): Condition => ({ type: "And", conditions });
-export const or = (...conditions: Condition[]): Condition => ({ type: "Or", conditions });
+export const and = (...conditions: Condition[]): Condition => ({ type: "And", conditions } as unknown as Condition);
+export const or = (...conditions: Condition[]): Condition => ({ type: "Or", conditions } as unknown as Condition);
 /** Multi: true when at least `count` of `conditions` hold. */
 export const atLeast = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "greaterThanOrEqual", value: count, conditions });
+  ({ type: "Multi", comparison: "greaterThanOrEqual", value: count, conditions } as unknown as Condition);
 /** Multi: true when at most `count` of `conditions` hold. */
 export const atMost = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "lessThanOrEqual", value: count, conditions });
+  ({ type: "Multi", comparison: "lessThanOrEqual", value: count, conditions } as unknown as Condition);
 /** Multi: true when fewer than `count` of `conditions` hold. */
 export const fewerThan = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "lessThan", value: count, conditions });
+  ({ type: "Multi", comparison: "lessThan", value: count, conditions } as unknown as Condition);
 /** Multi: true when exactly `count` of `conditions` hold. */
 export const exactly = (count: number, ...conditions: Condition[]): Condition =>
-  ({ type: "Multi", comparison: "equal", value: count, conditions });
+  ({ type: "Multi", comparison: "equal", value: count, conditions } as unknown as Condition);
 /** Multi with an explicit Comparator (same wire shape as YAML Multi). */
 export const multi = (
   count: number, comparison: Comparator, ...conditions: Condition[]
-): Condition => ({ type: "Multi", comparison, value: count, conditions });
+): Condition => ({ type: "Multi", comparison, value: count, conditions } as unknown as Condition);
 /**
  * Sequence. `andThen(30, "Minute", A, B)` is true at tick t when B is true at t
  * and A was true at some STRICTLY EARLIER tick in the preceding 30 minutes.
@@ -630,7 +657,7 @@ export const multi = (
  */
 export const andThen = (
   length: number, interval: Interval, ...conditions: Condition[]
-): Condition => ({ type: "Then", conditions, window: { length, interval } });
+): Condition => ({ type: "Then", conditions, window: { length, interval } } as unknown as Condition);
 /** Always-true gate for strategies whose cadence lives in the pipeline. */
 export const always = (): Condition => compare(Value(1), Value(0), "greaterThan");
 
@@ -686,7 +713,7 @@ export const volatilityTarget = (
 
 const rebalanceDecisionMetric = (
   metric: "allocationDrift" | "plannedTurnover" | "estimatedCost" | "expectedBenefit" | "netBenefit",
-): Indicator => ({ type: "RebalanceDecisionMetric", metric });
+): Indicator => ({ type: "RebalanceDecisionMetric", metric } as unknown as Indicator);
 export const RebalanceAllocationDrift = (): Indicator =>
   rebalanceDecisionMetric("allocationDrift");
 export const RebalancePlannedTurnover = (): Indicator =>
@@ -723,12 +750,18 @@ export const watchlistUniverse = (watchlistKey: string): Universe => ({ source: 
 
 export const buy = (
   target: AssetArg, amount: number, type: AllocationType = "percent of portfolio",
+  options: {executionPriority?:ExecutionPriority;funding?:PurchaseFunding} = {},
 ): BuyOrSellAction =>
-  ({ type: "Buy", targetAsset: toAsset(target), amount: { type, amount } });
+  ({ type: "Buy", targetAsset: toAsset(target), amount: { type, amount },...options });
 export const sell = (
   target: AssetArg, amount: number, type: AllocationType = "percent of portfolio",
+  options: {executionPriority?:ExecutionPriority} = {},
 ): BuyOrSellAction =>
-  ({ type: "Sell", targetAsset: toAsset(target), amount: { type, amount } });
+  ({ type: "Sell", targetAsset: toAsset(target), amount: { type, amount },...options });
+/** Sell only actual holdings that pass a candidate-bound condition. */
+export const sellHoldings = (condition:Condition,amount=100,type:AllocationType="percent of current positions",
+  options:{executionPriority?:ExecutionPriority}={}):BuyOrSellAction=>({type:"Sell",targetAsset:stockAsset("__PLACEHOLDER__"),
+    holdingCondition:condition,amount:{type,amount},...options});
 export const alert = (message: string): AlertAction => ({ type: "Alert", message });
 export const launchAgent = (config: {
   planningModel: string; executionModel: string; initialMessage: string;
@@ -986,6 +1019,8 @@ export const portfolio = (
     initialValue?: number; main?: boolean;
     supportsFractionalShares?: boolean; supportsCrypto?: boolean; alertsEnabled?: boolean;
     dividendPolicy?: DividendPolicy;
+    /** Cash-only T+1 proceeds. Missing live cash-cap evidence blocks purchases. */
+    cashSettlement?: "T1" | null;
     policy?: AuthoredPortfolioPolicy;
     deployment?: AuthoredDeploymentTiming;
   } = {},
@@ -1108,7 +1143,7 @@ export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval:
  * @param offsetBars Skip this many latest completed candles. 1 selects the previous window.
  * @param minutePolicy strict requires every minute. observed aggregates actual eligible-trade prints, skips empty candles, and publishes after the clock bucket closes. No synthetic prices; source coverage is a separate check.
  */
-export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" | "high" | "low" | "close" | "sma" = "close", bars: number = 1, offsetBars: number = 0, minutePolicy: "strict" | "observed" = "strict"): Indicator {
+export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" | "high" | "low" | "close" | "sma" | "endTime" = "close", bars: number = 1, offsetBars: number = 0, minutePolicy: "strict" | "observed" = "strict"): Indicator {
   const d: Record<string, unknown> = { type: "ChartBar" };
   setAsset(d, "targetAsset", asset);
   d["barMinutes"] = barMinutes;
@@ -1176,10 +1211,12 @@ export function ConsecutiveIncrease(indicator: Indicator, period: Period, lookba
  * @param condition Condition evaluated over the window.
  * @param length Length of time
  * @param interval Unit of time
+ * @param checkCadenceMinutes Optional. Counts completed regular-session checks instead of elapsed time. Window length is the required count; resets each session. Missing checks reset the count.
  */
-export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "Day"): Indicator {
+export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "Day", checkCadenceMinutes?: number): Indicator {
   const d: Record<string, unknown> = { type: "ConsecutiveTrue" };
   d.condition = condition;
+  if (checkCadenceMinutes !== undefined) d["checkCadenceMinutes"] = checkCadenceMinutes;
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
@@ -1503,16 +1540,31 @@ export function Index(metric: "VIX" | "SPX" | "NDX" | "DJI" | "RUT" | "SKEW" | "
   return d as unknown as Indicator;
 }
 /**
+ * IndicatorAtCondition indicator.
+ * @param condition Condition evaluated over the window.
+ */
+export function IndicatorAtCondition(operand: Indicator, condition: Condition, selection: "First" | "Latest" | "Maximum" | "Minimum" = "First", clock: Clock = "Calendar", initialValue?: number, length?: number, interval?: "Minute" | "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "IndicatorAtCondition" };
+  d.condition = condition;
+  d["selection"] = selection;
+  d["clock"] = clock;
+  if (initialValue !== undefined) d["initialValue"] = initialValue;
+  d.indicators = [operand];
+  if (length !== undefined || interval !== undefined) d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * IndicatorAtEntry indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param side The side of the fill the value is anchored to
  * @param orderStatus Matches order events with this status
  */
-export function IndicatorAtEntry(operand: Indicator, asset: AssetArg, side: Side, orderStatus: OrderStatus = "Filled"): Indicator {
+export function IndicatorAtEntry(operand: Indicator, asset: AssetArg, side: Side, orderStatus: OrderStatus = "Filled", anchor: "LatestFill" | "HoldingEntry" = "LatestFill"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorAtEntry" };
   setAsset(d, "targetAsset", asset);
   d["side"] = side;
   d["orderStatus"] = orderStatus;
+  d["anchor"] = anchor;
   d.indicators = [operand];
   return d as unknown as Indicator;
 }
@@ -1586,16 +1638,18 @@ export function IndicatorStandardDeviation(operand: Indicator, length: number = 
  * @param length Length of time
  * @param interval Unit of time
  */
-export function IndicatorWindowAgo(operand: Indicator, length: number, interval: Interval): Indicator {
+export function IndicatorWindowAgo(operand: Indicator, length: number, interval: Interval, sampling?: "Calendar" | "Observation" | "Session", initialValue?: number): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorWindowAgo" };
+  if (sampling !== undefined) d["sampling"] = sampling;
+  if (initialValue !== undefined) d["initialValue"] = initialValue;
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
 /**
- * News sentiment about an industry over its last lookbackDays daily news snapshots (default 1, the latest). industry is one of the canonical industry tags (the same list IsIndustry uses). Headlines come from the GDELT global news feed, and a fine-tuned model scores every headline that mentions the industry: whether it is really about the industry, and whether it is positive, neutral or negative news for it (a headline it calls neutral scores 0; others score from -1.0 to 1.0). Each trading day has one snapshot at 09:15 New York, and a headline counts toward the first session whose 09:15 cutoff is at or after the time GDELT published it. Backtests and live trading read the same rows. lookbackDays counts trading sessions whether or not the industry had news in them; a single session is noisy, and about 20 sessions is the usual window for a sentiment rule. Only headlines the model judges to be about the industry count, and copies of one story within 7 days count once per session. measure (default Mean): Mean is the average sentiment from -1.0 to 1.0, Median is the middle score (the average of the two middle scores for an even count), NetCount is positive minus negative headlines, ArticleCount is the number of qualifying headlines. Every measure has no value when the window cannot be read in full: before coverage begins on 2019-09-23, across sessions with no published snapshot, or when the latest snapshot due has not been published. Mean and Median also have no value when the window holds no qualifying headline; the counts are then 0. The value is the same for every asset: it takes no target asset.
+ * News sentiment about an industry over its last lookbackDays daily news snapshots (default 1, the latest). industry is one of the canonical industry tags (the same list IsIndustry uses). Headlines come from the GDELT global news feed, and a fine-tuned model scores every headline that mentions the industry: whether it is really about the industry, and whether it is positive, neutral or negative news for it (a headline it calls neutral scores 0; others score from -1.0 to 1.0). Each trading day has one snapshot at 09:15 New York, and a headline counts toward the first session whose 09:15 cutoff is at or after the time GDELT published it. Backtests and live trading read the same rows. lookbackDays counts trading sessions whether or not the industry had news in them; a single session is noisy, and about 20 sessions is the usual window for a sentiment rule. Only headlines the model judges to be about the industry count, and copies of one story within 7 days count once per session. measure (default Mean): Mean is the average sentiment from -1.0 to 1.0, Median is the middle score (the average of the two middle scores for an even count), NetCount is positive minus negative headlines, ArticleCount is the number of qualifying headlines. Coverage begins on 2019-09-23: a window reaching earlier is measured over the sessions since then, and the backtest warns that it held less history than configured. Every measure has no value across sessions with no published snapshot, or when the latest snapshot due has not been published. Mean and Median also have no value when the window holds no qualifying headline; the counts are then 0. The value is the same for every asset: it takes no target asset.
  * @param industry Canonical industry tag whose news to read, as IsIndustry lists it. Legacy aliases are separate news series and are rejected, never mapped.
- * @param measure Median: middle score from -1 to 1 (the average of the two middle scores for an even count), with no value when no qualifying headline. Mean: average sentiment from -1 to 1, with no value when the window has no qualifying headline. NetCount: positive minus negative headlines. ArticleCount: qualifying headlines. Every measure has no value before coverage begins on 2019-09-23, across missing snapshots, or when the due snapshot is unpublished.
+ * @param measure Median: middle score from -1 to 1 (the average of the two middle scores for an even count), with no value when no qualifying headline. Mean: average sentiment from -1 to 1, with no value when the window has no qualifying headline. NetCount: positive minus negative headlines. ArticleCount: qualifying headlines. Every measure has no value across missing snapshots or when the due snapshot is unpublished. Before coverage begins on 2019-09-23 the window holds the sessions available.
  * @param lookbackDays Whole trading sessions of daily 09:15 New York news snapshots; 1 is the latest and about 20 is the usual window. The same value for every asset.
  */
 export function IndustryNewsSentiment(industry: "technology" | "financialServices" | "healthcare" | "energy" | "consumerGoods" | "entertainmentAndMedia" | "manufacturing" | "transportation" | "realEstate" | "utilities" | "agriculture" | "education" | "retail" | "artificialIntelligence" | "aiInfrastructure" | "analytics" | "cloudComputing" | "dataCenter" | "database" | "cybersecurity" | "developerTools" | "software" | "saas" | "enterpriseSoftware" | "customerExperienceSoftware" | "productivityTools" | "collaborationSoftware" | "digitalSignatureAndAuthentication" | "hardware" | "consumerElectronics" | "networking" | "semiconductor" | "chipDesign" | "chipManufacturing" | "semiconductorEquipment" | "gpuAndAccelerators" | "memoryAndStorage" | "quantumComputing" | "robotics" | "industrialAutomation" | "iot" | "smartDevices" | "wearable" | "3dPrinting" | "augmentedReality" | "virtualReality" | "space" | "satellites" | "aerospace" | "defense" | "drones" | "financialInfrastructure" | "capitalMarketsTechnology" | "banking" | "assetManagement" | "brokerage" | "payments" | "fintech" | "insurance" | "autoInsurance" | "homeInsurance" | "lifeInsurance" | "healthInsurance" | "blockchain" | "cryptocurrency" | "biotechnology" | "pharmaceuticals" | "medicalDevices" | "digitalHealth" | "lifeSciencesSoftware" | "bioinformatics" | "computationalBiology" | "computationalDrugDiscovery" | "oncology" | "immunotherapy" | "vaccines" | "veterinary" | "oil" | "gas" | "oilfieldServices" | "cleanEnergy" | "renewableEnergy" | "solarEnergy" | "windEnergy" | "nuclearEnergy" | "hydrogen" | "batteryTechnology" | "miningAndNaturalResources" | "gold" | "silver" | "chemicals" | "advancedMaterials" | "waterInfrastructure" | "wasteManagementAndRecycling" | "forestry" | "construction" | "buildingMaterials" | "electricalAndGridInfrastructure" | "logisticsAndSupplyChain" | "airline" | "maritime" | "railroads" | "automotive" | "electricVehicle" | "autonomousTransportation" | "recreationalVehicle" | "cruise" | "rideShare" | "printing" | "packaging" | "householdProducts" | "ecommerce" | "digitalMarketplace" | "fashionAndApparel" | "luxuryGoods" | "jewelry" | "foodAndBeverage" | "foodDelivery" | "nutrition" | "petCare" | "outdoorAndRecreationalEquipment" | "sportsAndFitness" | "cannabis" | "hospitalityAndTravel" | "homeSecurity" | "advertising" | "gaming" | "gambling" | "sportsBetting" | "socialMedia" | "streaming" | "movies" | "musicAndAudio" | "publishing" | "telecommunications" | "edtech" | "proptech", measure: Measure = "Mean", lookbackDays: number = 1): Indicator {
@@ -1934,12 +1988,14 @@ export function MinutesSinceOptionOrder(underlying: string, optionType: OptionTy
  * MinutesSinceOrder indicator.
  * @param assets Ticker(s) whose orders are counted. One string or an array.
  * @param side Buy or Sell
+ * @param clock Optional elapsed-time clock; omitted retains calendar minutes.
  */
-export function MinutesSinceOrder(assets: AssetArg | AssetArg[], side: Side, orderStatus: OrderStatus = "Filled"): Indicator {
+export function MinutesSinceOrder(assets: AssetArg | AssetArg[], side: Side, orderStatus: OrderStatus = "Filled", clock?: Clock): Indicator {
   const d: Record<string, unknown> = { type: "MinutesSinceOrder" };
   setAssets(d, "targetAssets", assets);
   d["side"] = side;
   d["orderStatus"] = orderStatus;
+  if (clock !== undefined) d["clock"] = clock;
   return d as unknown as Indicator;
 }
 /**
@@ -2043,9 +2099,9 @@ export function NewPoliticalDisclosure(memberId: string, instrument: Instrument2
   return d as unknown as Indicator;
 }
 /**
- * News sentiment about the asset over its last lookbackDays daily news snapshots (default 1, the latest). Headlines come from the GDELT global news feed, and a fine-tuned model scores every headline that names the company: whether it is really about the company, and whether it is positive, neutral or negative news for it (a headline it calls neutral scores 0; others score from -1.0 to 1.0). Each trading day has one snapshot at 09:15 New York, and a headline counts toward the first session whose 09:15 cutoff is at or after the time GDELT published it. Backtests and live trading read the same rows. lookbackDays counts trading sessions whether or not the asset had news in them; a single session is noisy, and about 20 sessions is the usual window for a sentiment rule. Only headlines the model judges to be about the company count, and copies of one story within 7 days count once per session. measure (default Mean): Mean is the average sentiment from -1.0 to 1.0, Median is the middle score (the average of the two middle scores for an even count), NetCount is positive minus negative headlines, ArticleCount is the number of qualifying headlines. Every measure has no value when the window cannot be read in full: before coverage begins on 2019-09-23, across sessions with no published snapshot, or when the latest snapshot due has not been published. Mean and Median also have no value when the window holds no qualifying headline; the counts are then 0. Headlines are matched to the issuer, so every listed share class reads the same news and META reads Facebook-era headlines.
+ * News sentiment about the asset over its last lookbackDays daily news snapshots (default 1, the latest). Headlines come from the GDELT global news feed, and a fine-tuned model scores every headline that names the company: whether it is really about the company, and whether it is positive, neutral or negative news for it (a headline it calls neutral scores 0; others score from -1.0 to 1.0). Each trading day has one snapshot at 09:15 New York, and a headline counts toward the first session whose 09:15 cutoff is at or after the time GDELT published it. Backtests and live trading read the same rows. lookbackDays counts trading sessions whether or not the asset had news in them; a single session is noisy, and about 20 sessions is the usual window for a sentiment rule. Only headlines the model judges to be about the company count, and copies of one story within 7 days count once per session. measure (default Mean): Mean is the average sentiment from -1.0 to 1.0, Median is the middle score (the average of the two middle scores for an even count), NetCount is positive minus negative headlines, ArticleCount is the number of qualifying headlines. Coverage begins on 2019-09-23: a window reaching earlier is measured over the sessions since then, and the backtest warns that it held less history than configured. Every measure has no value across sessions with no published snapshot, or when the latest snapshot due has not been published. Mean and Median also have no value when the window holds no qualifying headline; the counts are then 0. Headlines are matched to the issuer, so every listed share class reads the same news and META reads Facebook-era headlines.
  * @param asset Pass CANDIDATE in a dynamic rebalance pipeline.
- * @param measure Median: middle score from -1 to 1, with no value when no qualifying news. Mean: average sentiment from -1 to 1, with no value when the window has no qualifying news. NetCount: positive minus negative headlines. ArticleCount: qualifying headlines. Every measure has no value before coverage begins on 2019-09-23, across missing snapshots, or when the due snapshot is unpublished.
+ * @param measure Median: middle score from -1 to 1, with no value when no qualifying news. Mean: average sentiment from -1 to 1, with no value when the window has no qualifying news. NetCount: positive minus negative headlines. ArticleCount: qualifying headlines. Every measure has no value across missing snapshots or when the due snapshot is unpublished. Before coverage begins on 2019-09-23 the window holds the sessions available.
  * @param lookbackDays Whole trading sessions of daily 09:15 New York news snapshots; 1 is the latest. A row is visible from the snapshot the lake assigned it, the same time in backtests and live trading.
  */
 export function NewsSentiment(asset: AssetArg, measure: Measure = "Mean", lookbackDays: number = 1): Indicator {
@@ -2340,6 +2396,15 @@ export function PortfolioValue(): Indicator {
   return d as unknown as Indicator;
 }
 /**
+ * PositionEntryPrice indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function PositionEntryPrice(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "PositionEntryPrice" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
  * PositionMaxDrawdown indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  */
@@ -2354,6 +2419,24 @@ export function PositionMaxDrawdown(asset: AssetArg): Indicator {
  */
 export function PositionMaxDrawup(asset: AssetArg): Indicator {
   const d: Record<string, unknown> = { type: "PositionMaxDrawup" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * PositionMinutesSinceHigh indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function PositionMinutesSinceHigh(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "PositionMinutesSinceHigh" };
+  setAsset(d, "targetAsset", asset);
+  return d as unknown as Indicator;
+}
+/**
+ * PositionPeakPrice indicator.
+ * @param asset Ticker name (ex. SPY, BTC)
+ */
+export function PositionPeakPrice(asset: AssetArg): Indicator {
+  const d: Record<string, unknown> = { type: "PositionPeakPrice" };
   setAsset(d, "targetAsset", asset);
   return d as unknown as Indicator;
 }
@@ -2689,7 +2772,7 @@ export interface BacktestConfig {
   baselineSymbol?: string;
   /** Typed buy-and-hold benchmark for comparisonValue. Use {type:'Cryptocurrency',symbol:'BTC-USD',name:'BTC-USD'} for BTC or {type:'Stock',symbol:'SPY',name:'SPY'} for a stock/ETF. Symbol text never determines asset type. Omit baseline_symbol when using this field. */
   baselineAsset?: Record<string, unknown>;
-  /** Time interval: Day or Minute (default Day). Minute is a daytrade tape. 730 days of minute data (selected range plus warmup) is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year or two is a normal second backtest, not an escalation. */
+  /** Time interval: Day or Minute (default Day). Day uses fixed OHLC decision/fill snapshots and overrides the portfolio deployment frequency, openDelayMinutes, closeLeadMinutes and intervalSeconds. Use Minute when the authored intraday schedule matters. Minute is a daytrade tape. 730 days of minute data (selected range plus warmup) is the HARD CAP; 90 days is only the DEFAULT when you name no dates. Name the dates you actually want — certifying a candidate on a full year or two is a normal second backtest, not an escalation. */
   interval?: "Day" | "Minute";
   /** Starting portfolio value (default 10000) Range 1..inf. */
   initialValue?: number;
@@ -2699,7 +2782,7 @@ export interface BacktestConfig {
   forceNewRun?: boolean;
   /** Optional fee contract keyed by AssetTypeEnum (Stock/Cryptocurrency/Option) with {amount, type: percent|dollars}. Omit for shared defaults (Option $0.65/contract). For replay of an optimizer/walk-forward study, pass that study's persisted feeConfig. OptionSlippageFraction is supported: 0 fills at quote mid, 1 at ask for buys/bid for sells; omitted uses the engine default 0.5. Fills require a current executable quote; this does not enable last-trade fallback pricing. */
   feeConfig?: FeeConfig;
-  /** Overrides the portfolio's dividend policy for this run only. Omit to use the portfolio's own setting (cash unless it was set to reinvest). "reinvest" buys more of the paying stock on each pay date, which is what a buy-and-hold comparison against the SPY total-return baseline needs. */
+  /** Overrides the portfolio's dividend policy for this run only. Omit to use the portfolio's own setting (cash unless it was set to reinvest). "reinvest" buys more of the paying stock on each pay date while that stock is still held. A fully exited position receives its locked dividend entitlement as cash without reopening the position. Reinvest is what a buy-and-hold comparison against the SPY total-return baseline needs. */
   dividendPolicy?: "cash" | "reinvest";
 }
 export interface WalkForwardConfig {
@@ -2979,6 +3062,14 @@ export const geneAllocationPct = (strategyIndex: number, values: number[]): Gene
   values: values as unknown[],
 });
 
+/** Sweep AllocationDollars (Action scope) over a value set. */
+export const geneAllocationDollars = (strategyIndex: number, values: number[]): Gene => ({
+  field: "AllocationDollars",
+  scope: "Action",
+  target: { scope: "Action", field: "AllocationDollars", strategyIndex },
+  values: values as unknown[],
+});
+
 /** Sweep TotalBudgetPct (Action scope) over a value set. */
 export const geneTotalBudgetPct = (strategyIndex: number, values: number[]): Gene => ({
   field: "TotalBudgetPct",
@@ -3076,10 +3167,10 @@ export const geneMaxSpreadPct = (strategyIndex: number, legIndex: number, values
 });
 
 /** Sweep SelectTopLimit (UniversePipeline scope) over a value set. */
-export const geneSelectTopLimit = (strategyIndex: number, stageIndex: number, values: number[]): Gene => ({
+export const geneSelectTopLimit = (strategyIndex: number, values: number[], sleeveName?: string): Gene => ({
   field: "SelectTopLimit",
   scope: "UniversePipeline",
-  target: { scope: "UniversePipeline", field: "SelectTopLimit", strategyIndex, stageIndex },
+  target: { scope: "UniversePipeline", field: "SelectTopLimit", strategyIndex, ...(sleeveName === undefined ? {} : { sleeveName }) },
   values: values as unknown[],
 });
 
@@ -3088,5 +3179,13 @@ export const geneUniversePipelineFilter = (strategyIndex: number, stageIndex: nu
   field: "UniversePipelineFilter",
   scope: "UniversePipeline",
   target: { scope: "UniversePipeline", field: "UniversePipelineFilter", strategyIndex, stageIndex },
+  values: values as unknown[],
+});
+
+/** Sweep UniversePipelineFilter (UniversePipeline scope) by adding a Filter stage to a pipeline that has none to replace. The stage goes ahead of the first SelectTop/SelectPercentile, so it narrows the universe before ranking. */
+export const geneAppendUniversePipelineFilter = (strategyIndex: number, values: { label: string; condition: Condition }[], sleeveName?: string): Gene => ({
+  field: "UniversePipelineFilter",
+  scope: "UniversePipeline",
+  target: { scope: "UniversePipeline", field: "UniversePipelineFilter", strategyIndex, ...(sleeveName === undefined ? {} : { sleeveName }), append: true },
   values: values as unknown[],
 });
