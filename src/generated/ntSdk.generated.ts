@@ -1046,13 +1046,6 @@ export function AbsoluteValue(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * AccountValue indicator.
- */
-export function AccountValue(): Indicator {
-  const d: Record<string, unknown> = { type: "AccountValue" };
-  return d as unknown as Indicator;
-}
-/**
  * AccumulationDistribution indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param interval Bar interval the line is accumulated on
