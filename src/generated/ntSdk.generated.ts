@@ -38,6 +38,11 @@ export interface Condition {
   readonly [nodeKind]: "Condition (true/false, not an indicator)";
   [key: string]: unknown;
 }
+/** Existing native Then timing: optional maximum window and trading-time wait. */
+export interface ThenTiming {
+  window?: { length: number; interval: Interval };
+  transition: { minimumTradingMinutes: number; waiting: boolean };
+}
 declare const candidateBound: unique symbol;
 /** Indicator bound to the pipeline candidate (Price(CANDIDATE), …). */
 export type CandidateIndicator = Indicator & { readonly [candidateBound]: true };
@@ -457,7 +462,7 @@ export interface Portfolio {
 export type DividendPolicy = "cash" | "reinvest";
 
 export type AssetType = "Stock" | "Cryptocurrency" | "Option" | "Other";
-export type Interval = "Day" | "Hour" | "Minute";
+export type Interval = "Day" | "Hour" | "Minute" | "TradingDay";
 export type Comparator = "lessThan" | "greaterThan" | "lessThanOrEqual" | "greaterThanOrEqual" | "equal" | "notEqual";
 export type SelectDirection = "Highest" | "Lowest";
 export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS" | "WATCHLIST";
@@ -655,9 +660,15 @@ export const multi = (
  * would call it with resolve/reject and never settle. Emits wire type "Then",
  * the same way atLeast/atMost/exactly emit "Multi".
  */
-export const andThen = (
-  length: number, interval: Interval, ...conditions: Condition[]
-): Condition => ({ type: "Then", conditions, window: { length, interval } } as unknown as Condition);
+export function andThen(length: number, interval: Interval, ...conditions: Condition[]): Condition;
+export function andThen(timing: ThenTiming, ...conditions: Condition[]): Condition;
+export function andThen(
+  timing: number | ThenTiming, first: Interval | Condition, ...rest: Condition[]
+): Condition {
+  return (typeof timing === "number"
+    ? { type: "Then", conditions: rest, window: { length: timing, interval: first } }
+    : { type: "Then", ...timing, conditions: [first, ...rest] }) as unknown as Condition;
+}
 /** Always-true gate for strategies whose cadence lives in the pipeline. */
 export const always = (): Condition => compare(Value(1), Value(0), "greaterThan");
 
@@ -1207,16 +1218,14 @@ export function ConsecutiveIncrease(indicator: Indicator, period: Period, lookba
   return d as unknown as Indicator;
 }
 /**
- * ConsecutiveTrue indicator.
+ * Report whether the ordinary condition has stayed true for the elapsed window. This is elapsed time, not a count of checks.
  * @param condition Condition evaluated over the window.
  * @param length Length of time
  * @param interval Unit of time
- * @param checkCadenceMinutes Optional. Counts completed regular-session checks instead of elapsed time. Window length is the required count; resets each session. Missing checks reset the count.
  */
-export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "Day", checkCadenceMinutes?: number): Indicator {
+export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "Day"): Indicator {
   const d: Record<string, unknown> = { type: "ConsecutiveTrue" };
   d.condition = condition;
-  if (checkCadenceMinutes !== undefined) d["checkCadenceMinutes"] = checkCadenceMinutes;
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
@@ -1233,14 +1242,16 @@ export function Correlation(operands: Indicator[], length: number = 60, interval
   return d as unknown as Indicator;
 }
 /**
- * CountTrue indicator.
- * @param condition Condition evaluated over the window.
- * @param length Length of time
- * @param interval Unit of time
+ * Count matching intervals inside a time lookback. The ordinary condition owns comparisons/events. countInterval contributes at most one match per interval; omitted means one unit of the lookback interval. TradingDay skips closed exchange dates.
+ * @param condition Ordinary condition whose matching intervals are counted.
+ * @param length Lookback length.
+ * @param interval Lookback time unit; TradingDay uses observed exchange sessions.
+ * @param countInterval Count at most once per this interval. Omit for one unit of the lookback interval.
  */
-export function CountTrue(condition: Condition, length: number = 1, interval: Interval = "Day"): Indicator {
+export function CountTrue(condition: Condition, length: number = 1, interval: Interval = "Day", countInterval?: { length: number; interval: Interval }): Indicator {
   const d: Record<string, unknown> = { type: "CountTrue" };
   d.condition = condition;
+  if (countInterval !== undefined) d["countInterval"] = countInterval;
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
 }
@@ -1279,6 +1290,21 @@ export function CurrentTimeMinutes(): Indicator {
  */
 export function CurrentTimeSeconds(): Indicator {
   const d: Record<string, unknown> = { type: "CurrentTimeSeconds" };
+  return d as unknown as Indicator;
+}
+/**
+ * Evaluation time in Unix seconds, including fractions. Use with ChartBar endTime for ordinary freshness comparisons; backtests use their simulated clock.
+ */
+export function CurrentTimestamp(): Indicator {
+  const d: Record<string, unknown> = { type: "CurrentTimestamp" };
+  return d as unknown as Indicator;
+}
+/**
+ * Inside a CountTrue historical condition, bind this operand at its value now while other operands use their historical observations. Elsewhere return the operand normally. Wrap a complete stateful operand, not an expression inside its recurrence.
+ */
+export function CurrentValue(operand: Indicator): Indicator {
+  const d: Record<string, unknown> = { type: "CurrentValue" };
+  d.indicators = [operand];
   return d as unknown as Indicator;
 }
 /**
@@ -1540,10 +1566,10 @@ export function Index(metric: "VIX" | "SPX" | "NDX" | "DJI" | "RUT" | "SKEW" | "
   return d as unknown as Indicator;
 }
 /**
- * IndicatorAtCondition indicator.
+ * Retain the operand from matching observations: First, Latest, Maximum, or Minimum. Ordinary conditions decide when to capture. An optional window expires observations; TradingDay skips closed exchange dates. Use this to freeze a qualified setup before entry or ratchet a numeric level, not IndicatorAtEntry when no fill exists yet.
  * @param condition Condition evaluated over the window.
  */
-export function IndicatorAtCondition(operand: Indicator, condition: Condition, selection: "First" | "Latest" | "Maximum" | "Minimum" = "First", clock: Clock = "Calendar", initialValue?: number, length?: number, interval?: "Minute" | "Day"): Indicator {
+export function IndicatorAtCondition(operand: Indicator, condition: Condition, selection: "First" | "Latest" | "Maximum" | "Minimum" = "First", clock: Clock = "Calendar", initialValue?: number, length?: number, interval?: Interval): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorAtCondition" };
   d.condition = condition;
   d["selection"] = selection;
@@ -1590,12 +1616,34 @@ export function IndicatorExponentialMovingAverage(operand: Indicator, length: nu
   return d as unknown as Indicator;
 }
 /**
+ * Rolling maximum of one numeric operand over a time window. ChartBar observations keep their completed candle end time; repeated reads do not extend their age. Available history is used, so express full-history coverage separately.
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function IndicatorMaximum(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "IndicatorMaximum" };
+  d.indicators = [operand];
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
  * IndicatorMeanAbsoluteDeviation indicator.
  * @param length Length of time
  * @param interval Unit of time
  */
 export function IndicatorMeanAbsoluteDeviation(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorMeanAbsoluteDeviation" };
+  d.indicators = [operand];
+  d.window = { length: length, interval: interval };
+  return d as unknown as Indicator;
+}
+/**
+ * Rolling minimum of one numeric operand over a time window. ChartBar observations keep their completed candle end time; repeated reads do not extend their age. Available history is used, so express full-history coverage separately.
+ * @param length Length of time
+ * @param interval Unit of time
+ */
+export function IndicatorMinimum(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+  const d: Record<string, unknown> = { type: "IndicatorMinimum" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
   return d as unknown as Indicator;
@@ -1634,13 +1682,12 @@ export function IndicatorStandardDeviation(operand: Indicator, length: number = 
   return d as unknown as Indicator;
 }
 /**
- * IndicatorWindowAgo indicator.
+ * Value at an elapsed time in the past. TradingDay instead reads the confirmed closing value of the reference exchange session, including early closes. Missing session evidence returns no value; initialValue applies before enough history exists.
  * @param length Length of time
  * @param interval Unit of time
  */
-export function IndicatorWindowAgo(operand: Indicator, length: number, interval: Interval, sampling?: "Calendar" | "Observation" | "Session", initialValue?: number): Indicator {
+export function IndicatorWindowAgo(operand: Indicator, length: number, interval: Interval, initialValue?: number): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorWindowAgo" };
-  if (sampling !== undefined) d["sampling"] = sampling;
   if (initialValue !== undefined) d["initialValue"] = initialValue;
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -2396,7 +2443,7 @@ export function PortfolioValue(): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PositionEntryPrice indicator.
+ * Original filled entry price for the current holding. Added shares preserve this original anchor; closing the holding resets it.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function PositionEntryPrice(asset: AssetArg): Indicator {
@@ -2423,7 +2470,7 @@ export function PositionMaxDrawup(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PositionMinutesSinceHigh indicator.
+ * Exchange trading minutes since the current holding's last new high. Closed-market minutes do not count. Added shares preserve the holding's observation path.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function PositionMinutesSinceHigh(asset: AssetArg): Indicator {
@@ -2432,7 +2479,7 @@ export function PositionMinutesSinceHigh(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PositionPeakPrice indicator.
+ * Highest observed price since the current holding's original entry. Added shares preserve the peak path; closing resets it.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function PositionPeakPrice(asset: AssetArg): Indicator {
