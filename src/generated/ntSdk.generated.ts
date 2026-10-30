@@ -464,7 +464,7 @@ export interface Portfolio {
 export type DividendPolicy = "cash" | "reinvest";
 
 export type AssetType = "Stock" | "Cryptocurrency" | "Option" | "Other";
-export type Interval = "Day" | "Hour" | "Minute" | "TradingDay";
+export type Interval = "Day" | "Hour" | "Minute" | "TradingDay" | "TradingMinute";
 export type Comparator = "lessThan" | "greaterThan" | "lessThanOrEqual" | "greaterThanOrEqual" | "equal" | "notEqual";
 export type SelectDirection = "Highest" | "Lowest";
 export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS" | "WATCHLIST";
@@ -1267,7 +1267,7 @@ export function Correlation(operands: Indicator[], length: number = 60, interval
  * Count matching intervals inside a time lookback. The ordinary condition owns comparisons/events. countInterval contributes at most one match per interval; omitted means one unit of the lookback interval. TradingDay skips closed exchange dates.
  * @param condition Ordinary condition whose matching intervals are counted.
  * @param length Lookback length.
- * @param interval Lookback time unit; TradingDay uses observed exchange sessions.
+ * @param interval Lookback time unit; TradingDay uses observed exchange sessions and TradingMinute (at most 1439) counts regular-session minutes across closed periods.
  * @param countInterval Count at most once per this interval. Omit for one unit of the lookback interval.
  */
 export function CountTrue(condition: Condition, length: number = 1, interval: Interval = "Day", countInterval?: { length: number; interval: Interval }): Indicator {
