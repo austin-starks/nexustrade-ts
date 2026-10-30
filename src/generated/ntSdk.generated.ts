@@ -215,7 +215,7 @@ export interface PurchaseFunding {
   executionPriority?: number;
   condition: Condition; rankBy: Indicator; direction: SelectDirection; amount: Allocation;
 }
-export interface BuyOrSellAction { type: "Buy" | "Sell"; targetAsset: Asset; amount: Allocation;
+export interface BuyOrSellAction { type: "Buy" | "Sell" | "Short" | "Cover"; targetAsset: Asset; amount: Allocation;
   executionPriority?:ExecutionPriority; funding?:PurchaseFunding; holdingCondition?:Condition;
 }
 export interface DepositOrWithdrawAction { type: "Deposit" | "Withdraw"; amount: DepositWithdrawAllocation }
@@ -769,6 +769,26 @@ export const sell = (
   options: {executionPriority?:ExecutionPriority} = {},
 ): BuyOrSellAction =>
   ({ type: "Sell", targetAsset: toAsset(target), amount: { type, amount },...options });
+/**
+ * Sell-to-open one stock: hold a short of exactly the sized shares. Sizing is
+ * "number of assets" (shares), "dollars", "percent of portfolio" or "percent of
+ * buying power"; capped by Reg-T initial margin. Refused while the book is long
+ * the stock. Needs a brokerage that can short stock (backtests and paper can).
+ */
+export const short = (
+  target: AssetArg, amount: number, type: AllocationType = "number of assets",
+  options: {executionPriority?:ExecutionPriority} = {},
+): BuyOrSellAction =>
+  ({ type: "Short", targetAsset: toAsset(target), amount: { type, amount },...options });
+/**
+ * Buy back an open stock short. "percent of current positions" is a percent of
+ * the open short; every size is capped at the short, so Cover never goes long.
+ */
+export const cover = (
+  target: AssetArg, amount = 100, type: AllocationType = "percent of current positions",
+  options: {executionPriority?:ExecutionPriority} = {},
+): BuyOrSellAction =>
+  ({ type: "Cover", targetAsset: toAsset(target), amount: { type, amount },...options });
 /** Sell only actual holdings that pass a candidate-bound condition. */
 export const sellHoldings = (condition:Condition,amount=100,type:AllocationType="percent of current positions",
   options:{executionPriority?:ExecutionPriority}={}):BuyOrSellAction=>({type:"Sell",targetAsset:stockAsset("__PLACEHOLDER__"),
