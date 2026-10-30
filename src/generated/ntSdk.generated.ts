@@ -316,10 +316,12 @@ export interface DynamicRebalanceAction {
    */
   canSell?: Condition | CandidateCondition;
   /**
-   * BACKTEST-ONLY. Permits negative rebalance targets (equity short legs).
-   * The backtest assumes shares were available to short each morning and
-   * accrues a modeled borrow fee. Live/paper deploy of a short strategy is
-   * rejected at deploy time (explicit non-parity with backtest).
+   * Permits negative rebalance targets (equity short legs, whole shares).
+   * Backtests and paper assume shares were available to short each morning
+   * and accrue a modeled borrow fee. Live deploy needs a brokerage that can
+   * short stock (Alpaca, Tradier, TradeStation, Public; margin account);
+   * elsewhere deploy is rejected. For a fixed-size short of one stock use
+   * short() / cover() instead.
    */
   allowShorts?: boolean;
   allocationPolicy?: AllocationPolicy;
