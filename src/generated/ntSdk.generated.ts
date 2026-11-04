@@ -71,7 +71,6 @@ export type Universe =
   | { source: "WATCHLIST"; watchlistKey: string };
 
 export interface Allocation { type: AllocationType; amount: number }
-export interface DepositWithdrawAllocation { type: DepositWithdrawAllocationType; amount: number }
 export interface OptionAllocation { type: OptionAllocationType; amount: number }
 /** DynamicRebalance per-name cap: contracts and buying-power percent are rejected. */
 export interface PerNameAllocation { type: "percent of portfolio" | "dollars"; amount: number }
@@ -218,7 +217,6 @@ export interface PurchaseFunding {
 export interface BuyOrSellAction { type: "Buy" | "Sell" | "Short" | "Cover"; targetAsset: Asset; amount: Allocation;
   executionPriority?:ExecutionPriority; funding?:PurchaseFunding; holdingCondition?:Condition;
 }
-export interface DepositOrWithdrawAction { type: "Deposit" | "Withdraw"; amount: DepositWithdrawAllocation }
 export interface AlertAction { type: "Alert"; message: string }
 /**
  * Keep a portfolio-scoped list set to currently public source membership.
@@ -386,7 +384,6 @@ export interface CloseOptionAction {
 }
 export type Action =
   | BuyOrSellAction
-  | DepositOrWithdrawAction
   | AlertAction
   | LaunchAgentAction
   | DynamicRebalanceAction
@@ -469,7 +466,6 @@ export type Comparator = "lessThan" | "greaterThan" | "lessThanOrEqual" | "great
 export type SelectDirection = "Highest" | "Lowest";
 export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS" | "WATCHLIST";
 export type AllocationType = "percent of portfolio" | "percent of buying power" | "percent of current positions" | "dollars" | "number of assets";
-export type DepositWithdrawAllocationType = "percent of portfolio" | "percent of buying power" | "dollars";
 export type OptionAllocationType = "dollars" | "percent of portfolio" | "percent of buying power" | "contracts" | "percent of realized premium";
 export type DeploymentBudgetType = "dollars" | "percent of portfolio";
 export type ExpirationPreference = "nearest" | "middle" | "furthest";
