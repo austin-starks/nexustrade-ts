@@ -1476,7 +1476,7 @@ export function Economic(metric: "NonfarmPayrolls" | "UnemploymentRate" | "Money
   return d as unknown as Indicator;
 }
 /**
- * ExponentialMovingAverage indicator.
+ * SMA/EMA window interval Day means elapsed calendar time, including closed exchange dates. TradingDay uses the exchange-session clock for exchange-traded assets and skips closed dates while preserving within-session time. For a conventional N-day stock moving average, author interval TradingDay unless the request explicitly specifies elapsed calendar days. An outer TradingDay lag does not change an inner Day average into an N-session average. Preserve an explicit calendar-day request as Day. Continuous-market daily windows use 24-hour Day intervals. A TradingDay window can still have a forming current reading: choose completed-session references separately when the signal requires confirmed closes. ChartBar periods and offsets already identify completed candles; preserve that clock instead of substituting a time-window average.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2622,7 +2622,7 @@ export function RelativeVolume(asset: AssetArg, length: number = 14, interval: I
   return d as unknown as Indicator;
 }
 /**
- * SimpleMovingAverage indicator.
+ * SMA/EMA window interval Day means elapsed calendar time, including closed exchange dates. TradingDay uses the exchange-session clock for exchange-traded assets and skips closed dates while preserving within-session time. For a conventional N-day stock moving average, author interval TradingDay unless the request explicitly specifies elapsed calendar days. An outer TradingDay lag does not change an inner Day average into an N-session average. Preserve an explicit calendar-day request as Day. Continuous-market daily windows use 24-hour Day intervals. A TradingDay window can still have a forming current reading: choose completed-session references separately when the signal requires confirmed closes. ChartBar periods and offsets already identify completed candles; preserve that clock instead of substituting a time-window average.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
