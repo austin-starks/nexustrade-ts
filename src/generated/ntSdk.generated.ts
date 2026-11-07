@@ -1425,17 +1425,6 @@ export function DaysSinceStrategyFired(): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceTransaction indicator.
- * @param transactionType Matches transaction events with this type (deposit or withdraw)
- * @param transactionStatus Matches transaction events with this status
- */
-export function DaysSinceTransaction(transactionType: "Deposit" | "Withdraw", transactionStatus: "Pending" | "Canceled" | "Completed" = "Completed"): Indicator {
-  const d: Record<string, unknown> = { type: "DaysSinceTransaction" };
-  d["transactionType"] = transactionType;
-  d["transactionStatus"] = transactionStatus;
-  return d as unknown as Indicator;
-}
-/**
  * DaysUntilEarnings indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  */
@@ -2833,7 +2822,7 @@ export interface BacktestConfig {
   startDate: string;
   /** Backtest end date (ISO format, e.g. 2024-12-31). Minute allows up to 730 days of minute data from start_date, counting minute-indicator warmup; never split a longer span into yearly Minute jobs. */
   endDate: string;
-  /** Legacy Stock benchmark shorthand for comparisonValue. Use baseline_asset with explicit Cryptocurrency type for crypto pairs; never provide both fields. When both fields are omitted, the single traded stock/option underlying is inferred, otherwise SPY. For single-name options use that underlying; compare multi-name books against a deliberately chosen benchmark. */
+  /** Deprecated Stock benchmark shorthand for comparisonValue. Use baseline_asset with an explicit Stock or Cryptocurrency type; never provide both fields. When both fields are omitted, the single traded stock/option underlying is inferred, otherwise SPY. For single-name options use that underlying; compare multi-name books against a deliberately chosen benchmark. */
   baselineSymbol?: string;
   /** Typed buy-and-hold benchmark for comparisonValue. Use {type:'Cryptocurrency',symbol:'BTC-USD',name:'BTC-USD'} for BTC or {type:'Stock',symbol:'SPY',name:'SPY'} for a stock/ETF. Symbol text never determines asset type. Omit baseline_symbol when using this field. */
   baselineAsset?: Record<string, unknown>;
