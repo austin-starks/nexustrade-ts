@@ -721,7 +721,6 @@ sequenceDiagram
 ```ts
 const run = await client.createAgent("Find momentum names in the S&P 500", {
   idempotencyKey: "momentum-scan-v1",
-  costCeilingUsd: 20,
 });
 for await (const event of run) {
   console.log(event.text);

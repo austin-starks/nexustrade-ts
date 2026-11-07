@@ -71,7 +71,6 @@ export type Universe =
   | { source: "WATCHLIST"; watchlistKey: string };
 
 export interface Allocation { type: AllocationType; amount: number }
-export interface DepositWithdrawAllocation { type: DepositWithdrawAllocationType; amount: number }
 export interface OptionAllocation { type: OptionAllocationType; amount: number }
 /** DynamicRebalance per-name cap: contracts and buying-power percent are rejected. */
 export interface PerNameAllocation { type: "percent of portfolio" | "dollars"; amount: number }
@@ -218,7 +217,6 @@ export interface PurchaseFunding {
 export interface BuyOrSellAction { type: "Buy" | "Sell" | "Short" | "Cover"; targetAsset: Asset; amount: Allocation;
   executionPriority?:ExecutionPriority; funding?:PurchaseFunding; holdingCondition?:Condition;
 }
-export interface DepositOrWithdrawAction { type: "Deposit" | "Withdraw"; amount: DepositWithdrawAllocation }
 export interface AlertAction { type: "Alert"; message: string }
 /**
  * Keep a portfolio-scoped list set to currently public source membership.
@@ -386,7 +384,6 @@ export interface CloseOptionAction {
 }
 export type Action =
   | BuyOrSellAction
-  | DepositOrWithdrawAction
   | AlertAction
   | LaunchAgentAction
   | DynamicRebalanceAction
@@ -469,7 +466,6 @@ export type Comparator = "lessThan" | "greaterThan" | "lessThanOrEqual" | "great
 export type SelectDirection = "Highest" | "Lowest";
 export type UniverseSource = "ALL_US_STOCKS" | "SP500" | "NASDAQ100" | "DJIA" | "CRYPTO" | "SPECIFIC_ASSETS" | "WATCHLIST";
 export type AllocationType = "percent of portfolio" | "percent of buying power" | "percent of current positions" | "dollars" | "number of assets";
-export type DepositWithdrawAllocationType = "percent of portfolio" | "percent of buying power" | "dollars";
 export type OptionAllocationType = "dollars" | "percent of portfolio" | "percent of buying power" | "contracts" | "percent of realized premium";
 export type DeploymentBudgetType = "dollars" | "percent of portfolio";
 export type ExpirationPreference = "nearest" | "middle" | "furthest";
@@ -1170,7 +1166,7 @@ export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval:
 /**
  * ChartBar indicator.
  * @param asset Ticker name (ex. SPY, BTC)
- * @param barMinutes Completed candles aligned to 9:30 ET for stocks. Must divide the 390-minute regular session.
+ * @param barMinutes Completed candles: stocks divide the 390-minute regular session from 9:30 ET. Crypto divides the 1440-minute UTC day or uses 10080 for a Monday UTC week; legacy intraday sizes remain valid. Observation cadence must be Minute even for daily/weekly candles.
  * @param line open: oldest selected candle; close: newest; high/low: range; sma: mean candle closes.
  * @param bars Number of chart candles, not elapsed minutes. SMA20 on five-minute candles: barMinutes=5, bars=20.
  * @param offsetBars Skip this many latest completed candles. 1 selects the previous window.
@@ -1278,7 +1274,7 @@ export function CountTrue(condition: Condition, length: number = 1, interval: In
   return d as unknown as Indicator;
 }
 /**
- * CrossAbove indicator.
+ * CrossAbove and CrossBelow are numeric Indicators, not Conditions: with available operands they return 1 when a crossing is detected and 0 otherwise; an unavailable operand produces no value. Comparing the result with Value(0), for example gt(CrossAbove(left, right), Value(0)), is valid; passing the indicator directly to and/or is not. They compare consecutive market observations, not consecutive strategy decisions or completed chart candles. Stateful operands continue observing behind time and position gates, so a crossing before a scheduled decision can be 0 by the decision. Zero at that decision does not prove the underlying series never crossed. For an ordinary daily moving-average crossover strategy without a more specific observation clock, compare the two most recently completed trading sessions and disclose that execution follows confirmation at a later scheduled decision. Define latestLeft=IndicatorWindowAgo(left,1,'TradingDay'), latestRight=IndicatorWindowAgo(right,1,'TradingDay'), priorLeft=IndicatorWindowAgo(left,2,'TradingDay'), and priorRight=IndicatorWindowAgo(right,2,'TradingDay'). An upward completed-session crossing is gt(latestLeft,latestRight) AND lte(priorLeft,priorRight); reverse the comparisons for a downward crossing. Comparing the forming/current average against lag 1 can miss a crossing that occurs at the close after the scheduled decision: by the next decision the lag-1 relationship has already changed. A bare CrossAbove/CrossBelow impulse has a similar observation-versus-decision limitation. Preserve an explicitly requested partial-session/current-versus-prior comparison or observation-level impulse, and explain its sampling limitations rather than silently changing its clock. TradingDay references a confirmed session closing value; Day is elapsed calendar time, including for the underlying average window. ChartBar already excludes the forming candle, so preserve its intended candle identity and offset instead of blindly adding another lag. For other bar/session/decision references choose operands and lag lengths from the requested observation clock. Before diagnosing a crossover mismatch, inspect saved operand windows, observation/decision cadence, current and referenced values, and retained evaluation evidence. An outer comparison audit without inner operands cannot establish why the crossing was absent. Do not propose removing a valid numeric comparison as a repair.
  */
 export function CrossAbove(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "CrossAbove" };
@@ -1286,7 +1282,7 @@ export function CrossAbove(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * CrossBelow indicator.
+ * CrossAbove and CrossBelow are numeric Indicators, not Conditions: with available operands they return 1 when a crossing is detected and 0 otherwise; an unavailable operand produces no value. Comparing the result with Value(0), for example gt(CrossAbove(left, right), Value(0)), is valid; passing the indicator directly to and/or is not. They compare consecutive market observations, not consecutive strategy decisions or completed chart candles. Stateful operands continue observing behind time and position gates, so a crossing before a scheduled decision can be 0 by the decision. Zero at that decision does not prove the underlying series never crossed. For an ordinary daily moving-average crossover strategy without a more specific observation clock, compare the two most recently completed trading sessions and disclose that execution follows confirmation at a later scheduled decision. Define latestLeft=IndicatorWindowAgo(left,1,'TradingDay'), latestRight=IndicatorWindowAgo(right,1,'TradingDay'), priorLeft=IndicatorWindowAgo(left,2,'TradingDay'), and priorRight=IndicatorWindowAgo(right,2,'TradingDay'). An upward completed-session crossing is gt(latestLeft,latestRight) AND lte(priorLeft,priorRight); reverse the comparisons for a downward crossing. Comparing the forming/current average against lag 1 can miss a crossing that occurs at the close after the scheduled decision: by the next decision the lag-1 relationship has already changed. A bare CrossAbove/CrossBelow impulse has a similar observation-versus-decision limitation. Preserve an explicitly requested partial-session/current-versus-prior comparison or observation-level impulse, and explain its sampling limitations rather than silently changing its clock. TradingDay references a confirmed session closing value; Day is elapsed calendar time, including for the underlying average window. ChartBar already excludes the forming candle, so preserve its intended candle identity and offset instead of blindly adding another lag. For other bar/session/decision references choose operands and lag lengths from the requested observation clock. Before diagnosing a crossover mismatch, inspect saved operand windows, observation/decision cadence, current and referenced values, and retained evaluation evidence. An outer comparison audit without inner operands cannot establish why the crossing was absent. Do not propose removing a valid numeric comparison as a repair.
  */
 export function CrossBelow(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "CrossBelow" };
@@ -1429,17 +1425,6 @@ export function DaysSinceStrategyFired(): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceTransaction indicator.
- * @param transactionType Matches transaction events with this type (deposit or withdraw)
- * @param transactionStatus Matches transaction events with this status
- */
-export function DaysSinceTransaction(transactionType: "Deposit" | "Withdraw", transactionStatus: "Pending" | "Canceled" | "Completed" = "Completed"): Indicator {
-  const d: Record<string, unknown> = { type: "DaysSinceTransaction" };
-  d["transactionType"] = transactionType;
-  d["transactionStatus"] = transactionStatus;
-  return d as unknown as Indicator;
-}
-/**
  * DaysUntilEarnings indicator.
  * @param asset Ticker name (ex. SPY, BTC)
  */
@@ -1480,7 +1465,7 @@ export function Economic(metric: "NonfarmPayrolls" | "UnemploymentRate" | "Money
   return d as unknown as Indicator;
 }
 /**
- * ExponentialMovingAverage indicator.
+ * SMA/EMA window interval Day means elapsed calendar time, including closed exchange dates. TradingDay uses the exchange-session clock for exchange-traded assets and skips closed dates while preserving within-session time. For a conventional N-day stock moving average, author interval TradingDay unless the request explicitly specifies elapsed calendar days. An outer TradingDay lag does not change an inner Day average into an N-session average. Preserve an explicit calendar-day request as Day. Continuous-market daily windows use 24-hour Day intervals. A TradingDay window can still have a forming current reading: choose completed-session references separately when the signal requires confirmed closes. ChartBar periods and offsets already identify completed candles; preserve that clock instead of substituting a time-window average.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2626,7 +2611,7 @@ export function RelativeVolume(asset: AssetArg, length: number = 14, interval: I
   return d as unknown as Indicator;
 }
 /**
- * SimpleMovingAverage indicator.
+ * SMA/EMA window interval Day means elapsed calendar time, including closed exchange dates. TradingDay uses the exchange-session clock for exchange-traded assets and skips closed dates while preserving within-session time. For a conventional N-day stock moving average, author interval TradingDay unless the request explicitly specifies elapsed calendar days. An outer TradingDay lag does not change an inner Day average into an N-session average. Preserve an explicit calendar-day request as Day. Continuous-market daily windows use 24-hour Day intervals. A TradingDay window can still have a forming current reading: choose completed-session references separately when the signal requires confirmed closes. ChartBar periods and offsets already identify completed candles; preserve that clock instead of substituting a time-window average.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2837,7 +2822,7 @@ export interface BacktestConfig {
   startDate: string;
   /** Backtest end date (ISO format, e.g. 2024-12-31). Minute allows up to 730 days of minute data from start_date, counting minute-indicator warmup; never split a longer span into yearly Minute jobs. */
   endDate: string;
-  /** Legacy Stock benchmark shorthand for comparisonValue. Use baseline_asset with explicit Cryptocurrency type for crypto pairs; never provide both fields. When both fields are omitted, the single traded stock/option underlying is inferred, otherwise SPY. For single-name options use that underlying; compare multi-name books against a deliberately chosen benchmark. */
+  /** Deprecated Stock benchmark shorthand for comparisonValue. Use baseline_asset with an explicit Stock or Cryptocurrency type; never provide both fields. When both fields are omitted, the single traded stock/option underlying is inferred, otherwise SPY. For single-name options use that underlying; compare multi-name books against a deliberately chosen benchmark. */
   baselineSymbol?: string;
   /** Typed buy-and-hold benchmark for comparisonValue. Use {type:'Cryptocurrency',symbol:'BTC-USD',name:'BTC-USD'} for BTC or {type:'Stock',symbol:'SPY',name:'SPY'} for a stock/ETF. Symbol text never determines asset type. Omit baseline_symbol when using this field. */
   baselineAsset?: Record<string, unknown>;
