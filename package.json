@@ -1,7 +1,7 @@
 {
   "name": "nexustrade",
-  "version": "4.0.0",
-  "description": "Typed TypeScript SDK for NexusTrade portfolio authoring, backtesting, and optimization",
+  "version": "5.0.0",
+  "description": "Typed TypeScript SDK for NexusTrade portfolio authoring, backtesting, optimization, and natural-language stock screening",
   "license": "MIT",
   "author": "Starks Technology",
   "repository": {
@@ -14,7 +14,8 @@
     "trading",
     "backtesting",
     "algorithmic-trading",
-    "portfolio"
+    "portfolio",
+    "stock-screener"
   ],
   "type": "module",
   "main": "./dist/cjs/index.js",

@@ -11,7 +11,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Deps](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](package.json)
 
-[Quickstart](#quickstart) · [Authoring](#authoring-strategies) · [Polling](#jobs-run-on-the-engine--you-poll) · [Agents](#agent-runs) · [Lake SQL](#lake-sql) · [Auth](#authentication) · [Errors](#errors)
+[Quickstart](#quickstart) · [Authoring](#authoring-strategies) · [Polling](#jobs-run-on-the-engine--you-poll) · [Agents](#agent-runs) · [Screener](#natural-language-screener) · [Auth](#authentication) · [Errors](#errors)
 
 </div>
 
@@ -344,11 +344,6 @@ waiter again with the same id rather than resubmitting.
 Transient network and HTTP 408/429/5xx polling failures retry the same operation
 at most twice consecutively, within the wait deadline. Persistent failures keep
 their original error code and operation ID; no new job is submitted.
-
-Durable lake exports use a 900-second server budget by default (registered API
-keys may request up to 1800 seconds). `waitForLakeQuery` defaults to 1200 seconds
-to include queue time. Compute token budgets remain 90 seconds by default and
-180 seconds maximum. A client wait timeout does not extend the server budget.
 
 **Batches.** `createBacktests` submits many in one request and returns one
 operation each; `waitForBacktests(operations)` waits on all of them. Prefer it
@@ -729,39 +724,10 @@ for await (const event of run) {
 }
 ```
 
-## Lake SQL
+## Natural-language screener
 
-Read-only SQL over the NexusTrade market-data lake, against the server-resolved
-`lake.*` catalog. Results are durable Parquet parts rather than an implicitly
-materialized in-memory array.
-
-```mermaid
-flowchart LR
-    A[createLakeQuery] --> B[waitForLakeQuery]
-    B --> C[getLakeQueryManifest]
-    C --> D[downloadLakeQueryPart]
-    D --> E[Stream Parquet within your memory budget]
-```
-
-```ts
-const query = await client.createLakeQuery(
-  {
-    query:
-      "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
-    params: ["AAPL"],
-    limits: { maxRows: 10_000 },
-  },
-  { idempotencyKey: "aapl-daily-v1" }
-);
-const finished = await client.waitForLakeQuery(query.id as string);
-const manifest = await client.getLakeQueryManifest(finished.id as string);
-```
-
-## Natural language
-
-Describe the screen instead of writing the SQL. The server generates it,
-validates it against the same `lake.*` catalog the engine reads, executes it,
-and hands back both the rows and the statement.
+Market data is available through the natural-language screener. Describe the
+screen in plain language; the server runs it and returns the matching rows.
 
 ```ts
 const screen = await client.createNlScreen(
@@ -771,12 +737,7 @@ const done = await client.waitForNlScreen(screen.id as string);
 
 const result = done.result as Record<string, unknown>;
 console.log(result.rows);
-console.log(result.sql); // always check the SQL — it is model-generated
 ```
-
-`returnQuery` defaults to `true` because the SQL is the audit trail: without it
-the rows are a number you cannot re-derive. It is returned on failure whatever
-you pass, since a rejected query is the most useful thing to read.
 
 Branch on `result.outcome`, not on status alone:
 
@@ -787,14 +748,7 @@ Branch on `result.outcome`, not on status alone:
 | `CLARIFICATION`     | The question was ambiguous; `result.clarification` asks    |
 | `GENERATION_FAILED` | The retry budget was spent — the only case worth retrying  |
 
-This method spends LLM credits. The structured `lake` API below does not.
-
-Use the manifest plus `downloadLakeQueryPart` to stream results within your own
-memory budget. NexusTrade picks a compatible backing engine for the referenced
-tables; your SQL does not change when it does.
-
-> The Python SDK additionally ships `nt.lake.sql(...)`, a DuckDB/pandas
-> convenience layer over these same endpoints.
+This method spends LLM credits.
 
 ## Managed watchlist universes
 
@@ -850,8 +804,7 @@ between refreshes. Missing facts remain unknown. `screenAny` composes OR rules;
 `screenBarVolume` and `screenBarDollarVolume` require a completed historical
 bar; live quotes do not supply those metrics in this release. Price and disclosure
 metrics support live screens. Failed coverage or publication blocks new allocation
-while consumers retain their exit behavior. Screen execution uses in-memory DuckDB;
-no local database volume or LLM call is required for refreshes.
+while consumers retain their exit behavior. Refreshes make no LLM call.
 
 ## Complete method reference
 
@@ -929,31 +882,14 @@ is missing here, so this list cannot drift from the code.
 | `getAgent(agentId)`                       | Read its status                     |
 | `attachAgent(agentId, { cursor })`        | Reattach to a run already in flight |
 
-**Lake SQL**
-
-| Method                                          | Purpose                              |
-| ----------------------------------------------- | ------------------------------------ |
-| `createLakeQuery(request, { idempotencyKey })`  | Submit read-only SQL                 |
-| `getLakeQuery(queryId)`                         | Read the operation                   |
-| `waitForLakeQuery(queryId, options)`            | Block until terminal                 |
-| `cancelLakeQuery(queryId)`                      | Cancel an owned query                |
-| `createLakeAsk(question)`                       | Ask the lake in plain language       |
-| `getLakeAsk(askId)`                             | Read the operation                   |
-| `waitForLakeAsk(askId, options)`                | Block until terminal                 |
-| `cancelLakeAsk(askId)`                          | Cancel an owned ask                  |
-| `getLakeQueryManifest(queryId)`                 | Schema, checksums, and part metadata |
-| `downloadLakeQueryPart(queryId, part, options)` | Download one Parquet part            |
-| `getLakeCatalog()`                              | List queryable tables                |
-| `describeLakeTable(table)`                      | Columns and types for one table      |
-
 **Natural language**
 
-| Method                                      | Purpose                                     |
-| ------------------------------------------- | ------------------------------------------- |
-| `createNlScreen(question, { returnQuery })` | Screen stocks from a plain-language question |
-| `getNlScreen(screenId)`                     | Read the operation                          |
-| `waitForNlScreen(screenId, options)`        | Block until terminal                        |
-| `cancelNlScreen(screenId)`                  | Cancel an owned screen                      |
+| Method                               | Purpose                                      |
+| ------------------------------------ | -------------------------------------------- |
+| `createNlScreen(question)`           | Screen stocks from a plain-language question |
+| `getNlScreen(screenId)`              | Read the operation                           |
+| `waitForNlScreen(screenId, options)` | Block until terminal                         |
+| `cancelNlScreen(screenId)`           | Cancel an owned screen                       |
 
 **Client construction**
 
@@ -1029,9 +965,8 @@ written back to `process.env`. Opt out with `NEXUSTRADE_DISABLE_DOTENV=1`.
 
 | Scope   | Grants                                                                            |
 | ------- | --------------------------------------------------------------------------------- |
-| `read`  | Portfolio, backtest, genetic, sweep, and walk-forward reads                       |
+| `read`  | Portfolio, backtest, genetic, sweep, and walk-forward reads; NL screens          |
 | `write` | Portfolio create/edit/fork, backtests, genetic/sweep, and walk-forward launches   |
-| `lake`  | Lake catalog, query lifecycle, manifests, result parts                            |
 
 A key missing the scope gets `403 insufficient_scope`.
 
@@ -1076,7 +1011,7 @@ try {
 | Status | Code                                   | Meaning                                                      |
 | ------ | -------------------------------------- | ------------------------------------------------------------ |
 | 401    | `invalid_token`                        | Missing, malformed, or expired key (or an OAuth JWT)         |
-| 403    | `insufficient_scope`                   | Key lacks `read`, `write`, or `lake`                         |
+| 403    | `insufficient_scope`                   | Key lacks the required scope                                 |
 | 400    | `invalid_request`, `invalid_portfolio` | Malformed input                                              |
 | 400    | `invalid_idempotency_key`              | Must match `[A-Za-z0-9._:-]{1,160}`                          |
 | 409    | `idempotency_conflict`                 | Key reused with a different payload                          |
@@ -1096,11 +1031,12 @@ _job_ takes.
 
 ## Scope
 
-Portfolio drafting, backtesting, optimization, walk-forward studies, and
-read-only SQL over the market-data lake, versioned under `/api/v1/nexustrade`.
+Portfolio drafting, backtesting, optimization, walk-forward studies, and the
+natural-language screener, versioned under `/api/v1/nexustrade`. Market data is
+available only through the natural-language screener.
 The full surface requires a registered API key; anonymous workspaces are limited
 to portfolio authoring/forking, backtests, and programmatic agent/chat calls.
-The screener and creating a live deployment remain outside this surface.
+Creating a live deployment remains outside this surface.
 Orders are reachable, but a live order is only ever staged for human approval —
 never submitted. `deploy` and `undeploy` act on whatever an existing id already
 is, live included.
