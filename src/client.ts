@@ -163,8 +163,7 @@ function encodeQuery(params: Record<string, string | undefined>): string {
 
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 const MAX_ERROR_BYTES = 64 * 1024;
-// Keep in lockstep with _MAX_REDIRECTS in sdk/python/nexustrade/client.py —
-// checkSdkClientParity.ts asserts the two numbers match.
+// Keep in lockstep with _MAX_REDIRECTS in sdk/python/nexustrade/client.py.
 const MAX_REDIRECTS = 5;
 // `status` for errors no HTTP status describes: the request never reached the
 // API, or it returned 2xx with an envelope the client could not use. Reporting
@@ -176,7 +175,7 @@ export const WORKSPACE_SESSION_HEADER = "X-NexusTrade-Session";
 // Polling defaults. Every NexusTrade job — backtest, optimization,
 // walk-forward, and any future operation kind — reports through the same
 // envelope, so one poller serves all of them. Kept in lockstep with the Python
-// SDK by checkSdkClientParity.ts; the backoff is deterministic (no jitter) so
+// SDK; the backoff is deterministic (no jitter) so
 // both languages issue the identical request sequence.
 export const DEFAULT_POLL_TIMEOUT_SECONDS = 900;
 export const DEFAULT_POLL_INTERVAL_SECONDS = 2;
@@ -208,7 +207,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 // A presigned PUT crosses the open internet with no API-side retry behind it, so
 // the client owns transient recovery. Jittered (unlike the poll backoff) because
 // every client retrying a storage blip on the same schedule is the blip.
-// checkSdkClientParity.ts asserts these match the Python SDK.
+// Kept in lockstep with the Python SDK.
 export const MAX_UPLOAD_PUT_ATTEMPTS = 5;
 export const UPLOAD_PUT_INITIAL_BACKOFF_SECONDS = 0.5;
 export const UPLOAD_PUT_MAX_BACKOFF_SECONDS = 8.0;
@@ -311,26 +310,6 @@ export interface Transport {
     path: string,
     options?: RequestOptions
   ): Promise<JsonObject>;
-}
-
-/**
- * Transports that can also return raw bytes.
- *
- * Lake result parts are Parquet, so they do not fit `Transport`, which is a
- * JSON contract. Declaring the capability keeps custom and test transports able
- * to implement downloads through a typed interface instead of a duck-typed
- * check.
- */
-export interface BinaryTransport extends Transport {
-  requestBytes(
-    method: string,
-    path: string,
-    options?: { byteRange?: [number, number]; maxBytes?: number }
-  ): Promise<Uint8Array>;
-}
-
-function supportsBinary(transport: Transport): transport is BinaryTransport {
-  return typeof (transport as BinaryTransport).requestBytes === "function";
 }
 
 /**
@@ -2262,53 +2241,11 @@ export class NexusTradeClient {
     return operationOf(response);
   }
 
-  async createLakeQuery(
-    request: JsonObject,
-    options: { idempotencyKey: string }
-  ): Promise<JsonObject> {
-    const response = await this.transport.request("POST", "lake/queries", {
-      body: request,
-      idempotencyKey: options.idempotencyKey,
-    });
-    return operationOf(response);
-  }
-
-  async getLakeQuery(queryId: string): Promise<JsonObject> {
-    return operationOf(
-      await this.transport.request(
-        "GET",
-        `lake/queries/${encodePathSegment(queryId)}`
-      )
-    );
-  }
-
-  async cancelLakeQuery(queryId: string): Promise<JsonObject> {
-    return operationOf(
-      await this.transport.request(
-        "POST",
-        `lake/queries/${encodePathSegment(queryId)}/cancel`
-      )
-    );
-  }
-
-  /**
-   * Submit a natural-language stock screen. Returns immediately; poll it.
-   *
-   * `returnQuery` keeps the generated SQL, engine and catalog version on the
-   * result. It defaults on: the SQL is the audit trail, and without it the rows
-   * are a number nobody can re-derive. It is returned on failure regardless,
-   * because a rejected query is the most useful thing to read.
-   */
-  async createNlScreen(
-    question: string,
-    options: { returnQuery?: boolean } = {}
-  ): Promise<JsonObject> {
+  /** Submit a natural-language stock screen. Returns immediately; poll it. */
+  async createNlScreen(question: string): Promise<JsonObject> {
     return operationOf(
       await this.transport.request("POST", "nl/screens", {
-        body: {
-          question,
-          returnQuery: options.returnQuery ?? true,
-        },
+        body: { question },
       })
     );
   }
@@ -2341,115 +2278,6 @@ export class NexusTradeClient {
       screenId,
       options
     );
-  }
-
-  /**
-   * Submit a natural-language lake ask. Returns immediately; poll it.
-   */
-  async createLakeAsk(question: string): Promise<JsonObject> {
-    return operationOf(
-      await this.transport.request("POST", "lake/ask", {
-        body: { question },
-      })
-    );
-  }
-
-  async getLakeAsk(askId: string): Promise<JsonObject> {
-    return operationOf(
-      await this.transport.request(
-        "GET",
-        `lake/ask/${encodePathSegment(askId)}`
-      )
-    );
-  }
-
-  async cancelLakeAsk(askId: string): Promise<JsonObject> {
-    return operationOf(
-      await this.transport.request(
-        "POST",
-        `lake/ask/${encodePathSegment(askId)}/cancel`
-      )
-    );
-  }
-
-  /** Block until a lake ask is terminal. See `waitForOperation`. */
-  async waitForLakeAsk(
-    askId: string,
-    options: WaitOptions = {}
-  ): Promise<JsonObject> {
-    return waitForOperation(
-      (id) => this.getLakeAsk(id),
-      askId,
-      options
-    );
-  }
-
-  async getLakeQueryManifest(queryId: string): Promise<JsonObject> {
-    return operationOf(
-      await this.transport.request(
-        "GET",
-        `lake/queries/${encodePathSegment(queryId)}/manifest`
-      )
-    );
-  }
-
-  async getLakeCatalog(): Promise<JsonObject[]> {
-    const response = await this.transport.request("GET", "lake/catalog");
-    const tables = response.tables;
-    if (!Array.isArray(tables) || !tables.every((t) => isJsonObject(t))) {
-      throw new NexusTradeApiError(
-        NO_HTTP_STATUS,
-        "invalid_response",
-        "Lake catalog response is missing tables."
-      );
-    }
-    return tables as JsonObject[];
-  }
-
-  async describeLakeTable(table: string): Promise<JsonObject> {
-    const name = table.startsWith("lake.") ? table.slice(5) : table;
-    const response = await this.transport.request(
-      "GET",
-      `lake/catalog/lake/${encodePathSegment(name)}`
-    );
-    const described = response.table;
-    if (!isJsonObject(described)) {
-      throw new NexusTradeApiError(
-        NO_HTTP_STATUS,
-        "invalid_response",
-        "Lake describe response is missing table."
-      );
-    }
-    return described;
-  }
-
-  /** Download one Parquet part, optionally a byte range of it. */
-  async downloadLakeQueryPart(
-    queryId: string,
-    part: number,
-    options: { byteRange?: [number, number]; maxBytes?: number } = {}
-  ): Promise<Uint8Array> {
-    if (!supportsBinary(this.transport)) {
-      throw new NexusTradeApiError(
-        NO_HTTP_STATUS,
-        "unsupported_transport",
-        "Lake part download requires a transport implementing requestBytes."
-      );
-    }
-    return this.transport.requestBytes(
-      "GET",
-      `lake/queries/${encodePathSegment(queryId)}/parts/${Math.trunc(part)}`,
-      options
-    );
-  }
-
-  /** Resolve once a lake query is terminal. See `waitForOperation`. */
-  async waitForLakeQuery(
-    queryId: string,
-    options: WaitOptions = {}
-  ): Promise<JsonObject> {
-    return waitForOperation((id) => this.getLakeQuery(id), queryId,
-      { ...options, timeoutSeconds: options.timeoutSeconds ?? 1200 });
   }
 
   /** Resolve once a backtest is terminal. See `waitForOperation`. */

@@ -51,8 +51,8 @@ function methodTableNames(): Set<string> {
 
 /**
  * `private` is erased at runtime, so the prototype still carries private
- * methods. Read the modifier from the source, the way checkSdkClientParity
- * does, rather than treating every prototype key as public API.
+ * methods. Read the modifier from the source rather than treating every
+ * prototype key as public API.
  */
 function privateNames(sourceFile: string): Set<string> {
   const source = readFileSync(join(ROOT, "src", sourceFile), "utf8");

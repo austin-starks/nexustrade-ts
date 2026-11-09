@@ -491,10 +491,10 @@ describe("operation waiter", () => {
       async request(method, path): Promise<JsonObject> {
         calls.push(`${method} ${path}`);
         if (calls.length === 1) throw new NexusTradeApiError(503, "service_unavailable", "temporary");
-        return { operation: { id: "lq-1", status: "completed" } };
+        return { operation: { id: "bt-1", status: "completed" } };
       },
     } });
-    const result = await client.waitForLakeQuery("lq-1", { pollIntervalSeconds: 0 });
+    const result = await client.waitForBacktest("bt-1", { pollIntervalSeconds: 0 });
     assert.equal(result.status, "completed");
     assert.equal(calls.length, 2);
     assert.ok(calls.every(call => call === calls[0] && call.startsWith("GET ")));
@@ -505,9 +505,9 @@ describe("operation waiter", () => {
     const client = new NexusTradeClient({ transport: {
       async request(): Promise<JsonObject> { calls++; throw new NexusTradeApiError(401, "invalid_token", "expired"); },
     } });
-    await assert.rejects(() => client.waitForLakeQuery("lq-1"), (error: unknown) => {
+    await assert.rejects(() => client.waitForBacktest("bt-1"), (error: unknown) => {
       assert.ok(error instanceof NexusTradeApiError);
-      assert.equal(error.operationId, "lq-1");
+      assert.equal(error.operationId, "bt-1");
       return true;
     });
     assert.equal(calls, 1);

@@ -143,10 +143,6 @@ retain same-day UTC availability on both inline and large-upload paths. Use
 `period_aggregate` plus `aggregatePeriod` for closed periods, or `disclosed`
 with per-row publication times.
 
-For daily market prices, prefer `lake.query("sec_daily_ohlc", ...)` or the
-canonical OHLC helper. `daily_ohlc` is a legacy/vendor table and may lag the
-canonical daily series.
-
 `client.listOrders({ portfolioId, statuses, page, limit })` lists owned orders with a read key. `client.cancelOrders(orderIds, { idempotencyKey, portfolioId })` cancels explicit IDs with a trade key. Inspect both `canceled` and `rejected`, and reuse the same key/payload for retries. Defaults and status gates are documented in README.
 
 ## Recipes
@@ -299,23 +295,22 @@ pair.
 </details>
 
 <details>
-<summary><b>Query the data lake</b></summary>
+<summary><b>Screen stocks in plain language</b></summary>
+
+Market data is available only through the natural-language screener.
 
 ```ts
-const query = await client.createLakeQuery(
-  {
-    query: "SELECT ticker, date, closingPrice FROM lake.daily_ohlc WHERE ticker = ?",
-    params: ["AAPL"],
-    limits: { maxRows: 10_000 },
-  },
-  { idempotencyKey: "aapl-daily-v1" },
+const screen = await client.createNlScreen(
+  "technology stocks with a market cap over 100 billion and a PE under 30",
 );
-const finished = await client.waitForLakeQuery(query.id as string);
-const manifest = await client.getLakeQueryManifest(finished.id as string);
+const done = await client.waitForNlScreen(screen.id as string);
+const result = done.result as Record<string, unknown>;
+console.log(result.outcome, result.rows);
 ```
 
-Always parameterize with `?` rather than interpolating into the SQL string.
-Stream parts with `downloadLakeQueryPart` instead of materializing large results.
+Branch on `result.outcome`. `EMPTY` is an answer, `CLARIFICATION` means the
+question was ambiguous (answer it rather than guessing), and only
+`GENERATION_FAILED` is worth retrying. Spends LLM credits.
 </details>
 
 <details>
@@ -353,7 +348,7 @@ All failures throw `NexusTradeApiError` with a stable `.status`, `.code`, and
 | Code | What to do |
 | --- | --- |
 | `invalid_token` | Key missing/expired, or an OAuth JWT was used. Only `sk-` keys work here. |
-| `insufficient_scope` | The key lacks `read` / `write` / `lake`. Do not retry. |
+| `insufficient_scope` | The key lacks the required scope. Do not retry. |
 | `invalid_portfolio` | The book is malformed — fix the builders, do not retry as-is. |
 | `idempotency_conflict` | Same key, different payload. Version the key. |
 | `idempotency_in_progress` | Same key, first call still running. Wait and re-read; never resubmit. |
@@ -382,17 +377,6 @@ you did not create in this session as possibly live.
 
 Not in this SDK. Do not attempt to reach them through it:
 
-- ~~**Screener** — MCP only.~~ **The screener is here now:**
-  `client.createNlScreen("...")` + `waitForNlScreen(id)` turns a plain-language
-  question into validated `lake.*` SQL, runs it, and returns the rows *and the
-  statement*. Prefer it over hand-writing SQL for stock selection — the server
-  picks tables from the same catalog the validator enforces, so it cannot name
-  a column that does not exist. Fall back to `createLakeQuery` only when
-  `outcome === "GENERATION_FAILED"`, or when the question is not a stock
-  screen. `EMPTY` is an answer, not a fallback trigger, and `CLARIFICATION`
-  means the question was ambiguous — answer it rather than guessing SQL. Always
-  report `result.sql`: it is model-generated, so it is the only way anyone can
-  check the numbers. Spends LLM credits; the lake API does not.
 - **Submitting a live order** — impossible from anywhere, not just here. Live
   orders are staged `PENDING_USER_APPROVAL` and a human approves them in the
   UI; the brokerage boundary refuses an unapproved live order regardless of
