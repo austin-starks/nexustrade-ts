@@ -283,6 +283,45 @@ describe("NexusTradeClient", () => {
     });
   });
 
+  it("maps a generated baseline_asset to the wire baselineAsset", async () => {
+    const transport = new FakeTransport([
+      { operations: [{ id: "bt-2", kind: "backtest", status: "running" }] },
+    ]);
+    const client = new NexusTradeClient({ transport });
+
+    await client.createBacktest(
+      {
+        tool: "backtest_portfolio",
+        portfolio: { name: "Book", strategies: [{ name: "s" }] },
+        args: {
+          start_date: "2024-01-01",
+          end_date: "2024-12-31",
+          baseline_asset: {
+            type: "Cryptocurrency",
+            symbol: "BTC-USD",
+            name: "BTC-USD",
+          },
+        },
+      },
+      { idempotencyKey: "bt-baseline-asset-v1" }
+    );
+
+    assert.deepEqual(transport.calls[0].body, {
+      backtests: [
+        {
+          portfolio: { name: "Book", strategies: [{ name: "s" }] },
+          startDate: "2024-01-01",
+          endDate: "2024-12-31",
+          baselineAsset: {
+            type: "Cryptocurrency",
+            symbol: "BTC-USD",
+            name: "BTC-USD",
+          },
+        },
+      ],
+    });
+  });
+
   it("rejects non-backtest generated handles", async () => {
     const client = new NexusTradeClient({ transport: new FakeTransport([]) });
 

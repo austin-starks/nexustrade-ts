@@ -2,7 +2,11 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { HttpTransport, NexusTradeApiError } from "../src/client.ts";
+import {
+  HttpTransport,
+  NexusTradeApiError,
+  NexusTradeClient,
+} from "../src/client.ts";
 import { NexusTradeWorkspaceSessionExpiredError } from "../src/client.ts";
 
 const BASE_URL = "https://gateway.example/api/v1";
@@ -405,5 +409,49 @@ describe("HttpTransport", () => {
       baseUrl: BASE_URL,
     });
     assert.ok(!JSON.stringify(transport).includes("sk-temp"));
+  });
+
+  it("applies the client's requestTimeoutSeconds to every HTTP request", async () => {
+    stubFetch(
+      (call) =>
+        new Promise<Response>((_resolve, reject) => {
+          call.init.signal?.addEventListener("abort", () =>
+            reject(new Error("aborted by request timeout")),
+          );
+        }),
+    );
+    const client = new NexusTradeClient({
+      apiKey: "sk-temp",
+      baseUrl: BASE_URL,
+      requestTimeoutSeconds: 0.05,
+    });
+    const started = Date.now();
+
+    await assert.rejects(
+      () => client.getBacktest("bt-1"),
+      (error: unknown) =>
+        error instanceof NexusTradeApiError && error.code === "transport_error",
+    );
+    assert.ok(Date.now() - started < 5_000);
+  });
+
+  it("rejects an invalid or unusable requestTimeoutSeconds", () => {
+    assert.throws(
+      () =>
+        new NexusTradeClient({
+          apiKey: "sk-temp",
+          baseUrl: BASE_URL,
+          requestTimeoutSeconds: 0,
+        }),
+      /timeoutSeconds must be positive/,
+    );
+    assert.throws(
+      () =>
+        new NexusTradeClient({
+          transport: { request: async () => ({}) },
+          requestTimeoutSeconds: 60,
+        }),
+      /built-in HTTP transport/,
+    );
   });
 });

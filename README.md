@@ -119,6 +119,27 @@ Backtest operations may include `warnings: string[]` immediately after
 submission and again in the terminal `result`. Treat them as material caveats;
 they do not change a successful operation into a failure.
 
+### Benchmark
+
+A terminal `result` also carries the benchmark the run was compared against:
+`result.baselineSymbol` and `result.baselineStatistics`, the buy-and-hold
+benchmark's statistics over the same window (for example
+`baselineStatistics.percentChange`). Choose the benchmark with
+`backtest(book, { ..., baselineAsset: { type: "Stock", symbol: "QQQ" } })`, or
+`{ type: "Cryptocurrency", symbol: "BTC-USD" }`. `baselineSymbol` is the older
+Stock-only shorthand; pass one or the other, never both. When both are
+omitted, the single traded stock or option underlying is the benchmark,
+otherwise SPY.
+
+Changed in 5.2.0: an omitted baseline used to be SPY for every API backtest.
+It is now inferred exactly as the MCP `backtest_portfolio` tool infers it, and
+an explicit baseline symbol is uppercased. Earlier results were not rerun. A
+new run of the same book can therefore report a different benchmark, so pass
+the baseline explicitly where an earlier comparison must hold.
+A cached single-name spec that omitted the baseline therefore runs once more
+after upgrading, because its benchmark is now part of the run's identity. The
+portfolio handle accepts the same typed benchmark: `PortfolioHandle.backtest({ baselineAsset })`.
+
 ### Collateral at risk
 
 A terminal operation's `result.statistics` answers how much capital the run had
@@ -898,6 +919,7 @@ is missing here, so this list cannot drift from the code.
 | `new NexusTradeClient({ apiKey, baseUrl })` | Explicit credentials                     |
 | `new NexusTradeClient()`                    | Lazy anonymous workspace with strict limits |
 | `NexusTradeClient.fromEnvironment()`        | Read them from the environment or `.env` |
+| `new NexusTradeClient({ requestTimeoutSeconds })` | Per-request HTTP timeout (default 30); also accepted by `fromEnvironment` |
 | `exportWorkspaceSession()`                  | Export an anonymous workspace for later use |
 | `importWorkspaceSession(token)`             | Resume an existing anonymous workspace      |
 
@@ -1025,9 +1047,17 @@ check on an otherwise-successful reply.
 
 ## Timeouts
 
-`new HttpTransport({ timeoutSeconds })` (default 30) is a total wall-clock
-deadline for one request. Neither it nor the poll timeout bounds how long a
-_job_ takes.
+`new NexusTradeClient({ requestTimeoutSeconds })` (default 30) sets the HTTP
+transport's total wall-clock deadline for one request. Raise it for large
+`createBacktests` batches:
+
+```ts
+const client = NexusTradeClient.fromEnvironment({ requestTimeoutSeconds: 120 });
+```
+
+It is separate from the `timeoutSeconds` wait option, which bounds how long a
+poll waits. Neither bounds how long a _job_ takes. A custom `transport`
+configures its own timeout, so passing both throws.
 
 ## Scope
 

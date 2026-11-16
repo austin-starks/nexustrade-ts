@@ -811,12 +811,15 @@ export interface NexusTradeClientOptions {
   baseUrl?: string;
   workspaceSession?: string;
   transport?: Transport;
+  /** Per-request HTTP timeout for the built-in transport (default 30). */
+  requestTimeoutSeconds?: number;
 }
 
 const BACKTEST_ARG_NAMES: ReadonlyArray<readonly [string, string]> = [
   ["start_date", "startDate"],
   ["end_date", "endDate"],
   ["baseline_symbol", "baseline"],
+  ["baseline_asset", "baselineAsset"],
   ["interval", "interval"],
   ["initial_value", "initialValue"],
   ["generate_events", "generateEvents"],
@@ -1232,6 +1235,12 @@ export class NexusTradeClient {
 
   constructor(options: NexusTradeClientOptions = {}) {
     if (options.transport) {
+      if (options.requestTimeoutSeconds !== undefined) {
+        throw new Error(
+          "requestTimeoutSeconds applies only to the built-in HTTP transport; " +
+            "configure a custom transport directly."
+        );
+      }
       this.transport = options.transport;
       return;
     }
@@ -1247,11 +1256,14 @@ export class NexusTradeClient {
       apiKey,
       baseUrl: baseUrl ?? DEFAULT_API_BASE_URL,
       workspaceSession: options.workspaceSession,
+      timeoutSeconds: options.requestTimeoutSeconds,
     });
   }
 
-  static fromEnvironment(): NexusTradeClient {
-    return new NexusTradeClient();
+  static fromEnvironment(
+    options: Pick<NexusTradeClientOptions, "requestTimeoutSeconds"> = {}
+  ): NexusTradeClient {
+    return new NexusTradeClient(options);
   }
 
   /** Return the anonymous workspace token after the first API call bootstraps it. */
