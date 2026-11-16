@@ -227,6 +227,31 @@ describe("PortfolioHandle", () => {
     assert.equal(backtests[0]?.portfolio, undefined);
   });
 
+  it("backtest forwards a typed baselineAsset", async () => {
+    const transport = new FakeTransport([
+      { operations: [{ id: "bt-2", kind: "backtest", status: "running" }] },
+    ]);
+    const book = new PortfolioHandle(
+      { name: "Momentum", strategies: [] },
+      { id: "chat-1", transport },
+    );
+
+    await book.backtest({
+      startDate: "2024-01-01",
+      endDate: "2024-12-31",
+      idempotencyKey: "bt-asset-v1",
+      baselineAsset: { type: "Cryptocurrency", symbol: "BTC-USD" },
+    });
+
+    const body = transport.calls[0]?.body as JsonObject;
+    const backtests = body.backtests as JsonObject[];
+    assert.deepEqual(backtests[0]?.baselineAsset, {
+      type: "Cryptocurrency",
+      symbol: "BTC-USD",
+    });
+    assert.equal(backtests[0]?.baseline, undefined);
+  });
+
   it("deploy returns a different id than save", async () => {
     const transport = new FakeTransport([
       {

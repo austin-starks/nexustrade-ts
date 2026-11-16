@@ -457,6 +457,8 @@ export class PortfolioHandle implements Portfolio {
     endDate: string;
     idempotencyKey: string;
     baseline?: string;
+    /** Typed benchmark `{ type, symbol, name? }`; never with `baseline`. */
+    baselineAsset?: JsonObject;
     interval?: string;
     initialValue?: number;
     generateEvents?: boolean;
@@ -478,6 +480,9 @@ export class PortfolioHandle implements Portfolio {
           endDate: options.endDate,
         };
     if (options.baseline !== undefined) input.baseline = options.baseline;
+    if (options.baselineAsset !== undefined) {
+      input.baselineAsset = options.baselineAsset;
+    }
     if (options.interval !== undefined) input.interval = options.interval;
     if (options.initialValue !== undefined) {
       input.initialValue = options.initialValue;
