@@ -1066,7 +1066,7 @@ export const portfolio = (
 
 // ---- generated indicator builders ----
 /**
- * AbsoluteValue indicator.
+ * The absolute value of an indicator.
  */
 export function AbsoluteValue(operand: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "AbsoluteValue" };
@@ -1074,7 +1074,7 @@ export function AbsoluteValue(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * AccumulationDistribution indicator.
+ * Running total of close-location value times volume. Unlike OBV it weights where in the range the bar closed, so weak closes on high volume distribute. Range: Unbounded (cumulative).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param interval Bar interval the line is accumulated on
  */
@@ -1085,7 +1085,7 @@ export function AccumulationDistribution(asset: AssetArg, interval: Interval = "
   return d as unknown as Indicator;
 }
 /**
- * AverageDirectionalIndex indicator.
+ * Wilder's ADX: trend strength on 0-100, with optional +DI and -DI trend-direction lines. ADX above ~25 is conventionally a strong trend. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1099,7 +1099,7 @@ export function AverageDirectionalIndex(asset: AssetArg, length: number = 14, in
   return d as unknown as Indicator;
 }
 /**
- * AverageTrueRange indicator.
+ * The average of True Range over a window. A smoothed measure of volatility used for position sizing and stop-losses. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1111,7 +1111,7 @@ export function AverageTrueRange(asset: AssetArg, length: number = 14, interval:
   return d as unknown as Indicator;
 }
 /**
- * BearishFairValueGap indicator.
+ * Detects a bearish fair value gap (3-candle gap down) on minute bars. Returns the gap's resistance price (candle1 low) while the pattern is active; otherwise no value (condition fails). Not a 0/1 flag — never compare to 1. Range: price when present.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function BearishFairValueGap(asset: AssetArg): Indicator {
@@ -1120,7 +1120,7 @@ export function BearishFairValueGap(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * BollingerBand indicator.
+ * One Bollinger band, returned as a single number: the simple moving average of price plus the given number of standard deviations of price over the same window. A positive number gives the upper band, a negative number the lower band, and 0 the moving average itself. Range: Same scale as price.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1135,7 +1135,7 @@ export function BollingerBand(asset: AssetArg, length: number = 30, interval: In
 }
 export const BBand = BollingerBand;
 /**
- * BullishFairValueGap indicator.
+ * Detects a bullish fair value gap (3-candle gap up) on minute bars. Returns the gap's support price (candle1 high) while the pattern is active; otherwise no value (condition fails). Not a 0/1 flag — never compare to 1 (that is for CrossAbove/CrossBelow). Range: price when present.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function BullishFairValueGap(asset: AssetArg): Indicator {
@@ -1144,14 +1144,14 @@ export function BullishFairValueGap(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * BuyingPower indicator.
+ * The amount of cash available to make new purchases. Range: >= 0.
  */
 export function BuyingPower(): Indicator {
   const d: Record<string, unknown> = { type: "BuyingPower" };
   return d as unknown as Indicator;
 }
 /**
- * ChaikinMoneyFlow indicator.
+ * Money flow volume over money volume across N bars, bounded in -1 to +1. Sustained readings above +0.2 show institutional accumulation. Range: -1 to +1.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1163,7 +1163,7 @@ export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval:
   return d as unknown as Indicator;
 }
 /**
- * ChartBar indicator.
+ * Prices, the average close, or the end time of completed chart candles, built from contiguous minute data. Stock candles align to the regular trading session. Range: Same scale as price for open, high, low, close and sma; the endTime line returns the end time of the newest selected candle in Unix seconds.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param barMinutes Completed candles: stocks divide the 390-minute regular session from 9:30 ET. Crypto divides the 1440-minute UTC day or uses 10080 for a Monday UTC week; legacy intraday sizes remain valid. Observation cadence must be Minute even for daily/weekly candles.
  * @param line open: oldest selected candle; close: newest; high/low: range; sma: mean candle closes.
@@ -1182,7 +1182,7 @@ export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" |
   return d as unknown as Indicator;
 }
 /**
- * CommodityChannelIndex indicator.
+ * Deviation of the typical price from its moving average, scaled by mean deviation. Readings above +100 are overbought, below -100 oversold. Range: Unbounded (typically -300 to +300).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1196,7 +1196,7 @@ export function CommodityChannelIndex(asset: AssetArg, length: number = 20, inte
   return d as unknown as Indicator;
 }
 /**
- * CompoundAnnualGrowthRate indicator.
+ * The annualized growth rate of a fundamental metric over a specified number of years. Smooths out quarterly volatility to show the long-term trend. Range: Unbounded (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param metric The fundamental metric to use
  * @param years Floating point years value
@@ -1247,8 +1247,8 @@ export function ConsecutiveTrue(condition: Condition, length: number = 1, interv
   return d as unknown as Indicator;
 }
 /**
- * Correlation indicator.
- * @param operands Sub-indicators this compound operates on.
+ * Rolling Pearson correlation (-1 to 1) of two indicators' period-over-period returns over N paired observations. Flat or degenerate windows read no-signal instead of a fabricated number.
+ * @param operands One list of exactly 2 sub-indicators.
  * @param length Length of time
  * @param interval Unit of time
  */
@@ -1289,21 +1289,21 @@ export function CrossBelow(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * CurrentTimeHours indicator.
+ * Hours since midnight in America/New_York time, including fractional hours. For example, 9:30 AM returns 9.5. Daylight saving time is handled automatically.
  */
 export function CurrentTimeHours(): Indicator {
   const d: Record<string, unknown> = { type: "CurrentTimeHours" };
   return d as unknown as Indicator;
 }
 /**
- * CurrentTimeMinutes indicator.
+ * Minutes since midnight in America/New_York time, including fractional minutes. For example, 9:30 AM returns 570. Daylight saving time is handled automatically.
  */
 export function CurrentTimeMinutes(): Indicator {
   const d: Record<string, unknown> = { type: "CurrentTimeMinutes" };
   return d as unknown as Indicator;
 }
 /**
- * CurrentTimeSeconds indicator.
+ * Seconds since midnight in America/New_York time, including fractions of a second. For example, 9:30 AM returns 34200. Daylight saving time is handled automatically.
  */
 export function CurrentTimeSeconds(): Indicator {
   const d: Record<string, unknown> = { type: "CurrentTimeSeconds" };
@@ -1325,7 +1325,7 @@ export function CurrentValue(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * CustomIndicator indicator.
+ * Account-owned timestamp/value data uploaded through CSV or JSON ingestion. Range: User-defined numeric value.
  * @param asset Pass CANDIDATE inside a rebalance pipeline to bind per candidate.
  * @param customIndicatorId 24-char hex ObjectId of the owned series (list_custom_indicators).
  */
@@ -1336,28 +1336,28 @@ export function CustomIndicator(asset: AssetArg, customIndicatorId: string): Ind
   return d as unknown as Indicator;
 }
 /**
- * Date indicator.
+ * The day of the month in America/New_York, from 1 through 31. Combine with Month and Year for a specific calendar date.
  */
 export function Date(): Indicator {
   const d: Record<string, unknown> = { type: "Date" };
   return d as unknown as Indicator;
 }
 /**
- * Day indicator.
+ * The weekday in America/New_York: Monday = 1 through Sunday = 7. Use Date for the day of the month.
  */
 export function Day(): Indicator {
   const d: Record<string, unknown> = { type: "Day" };
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceAgent indicator.
+ * The number of days since an AI agent was launched by this strategy. Useful for rate-limiting agent launches. Range: >= 0.
  */
 export function DaysSinceAgent(): Indicator {
   const d: Record<string, unknown> = { type: "DaysSinceAgent" };
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceAlert indicator.
+ * The number of days since an alert was triggered. Useful for rate-limiting alerts. Range: >= 0.
  * @param message (Optional) Message to display when the indicator is triggered
  */
 export function DaysSinceAlert(message: string): Indicator {
@@ -1366,7 +1366,7 @@ export function DaysSinceAlert(message: string): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceEarnings indicator.
+ * Calendar days since the asset's most recent earnings report. In backtests and live, this is the last actually-reported quarter at-or-before the decision time (no look-ahead). Use to time post-earnings entries (e.g. fade the gap after N days, or wait for the IV crush to settle). Range: >= 0 (0 on the report day; grows as time passes).
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function DaysSinceEarnings(asset: AssetArg): Indicator {
@@ -1375,14 +1375,14 @@ export function DaysSinceEarnings(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceLastRebalanceOptionOrder indicator.
+ * Elapsed days since the latest Filled-matching portfolio order stamped RebalanceOption, RebalanceOptionRenewal or RebalanceOptionFunding. It uses fill time and ignores strategy ID, so these strategies share a cooldown. Unfilled or canceled orders do not reset it. Range: >= 0 (days), or a large number if no RebalanceOption-generated order exists.
  */
 export function DaysSinceLastRebalanceOptionOrder(): Indicator {
   const d: Record<string, unknown> = { type: "DaysSinceLastRebalanceOptionOrder" };
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceOptionOrder indicator.
+ * The number of days since the most recent option order matching the specified filters. Supports filtering by underlying, option type (call/put), spread type, direction (long/short), position effect (open/close), and days to expiration at order time. Range: >= 0 (days), or a large number if no matching order exists.
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -1405,7 +1405,7 @@ export function DaysSinceOptionOrder(underlying: string, optionType: OptionType,
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceOrder indicator.
+ * The number of days since the most recent order matching the specified filters. Range: >= 0 (days), or a large number if no matching order exists.
  * @param assets Ticker(s) whose orders are counted. One string or an array.
  * @param side Buy or Sell
  */
@@ -1417,14 +1417,14 @@ export function DaysSinceOrder(assets: AssetArg | AssetArg[], side: Side, orderS
   return d as unknown as Indicator;
 }
 /**
- * DaysSinceStrategyFired indicator.
+ * The number of days since the current strategy last produced an execution artifact. Counts same-strategy order rows, rebalance orders, and launched agents. Range: >= 0 (days), or a large number if the strategy has never fired.
  */
 export function DaysSinceStrategyFired(): Indicator {
   const d: Record<string, unknown> = { type: "DaysSinceStrategyFired" };
   return d as unknown as Indicator;
 }
 /**
- * DaysUntilEarnings indicator.
+ * Calendar days until the asset's next expected earnings report. In backtests the next date is a point-in-time cadence estimate from the last report (no look-ahead); live trading uses the real next scheduled date. Use to time entries and exits around earnings. Range: >= 0 (0 on/after the expected report day; counts down as it nears).
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function DaysUntilEarnings(asset: AssetArg): Indicator {
@@ -1433,7 +1433,7 @@ export function DaysUntilEarnings(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Divide indicator.
+ * Quotient of indicators.
  */
 export function Divide(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Divide" };
@@ -1441,7 +1441,7 @@ export function Divide(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * DonchianChannel indicator.
+ * Highest high and lowest low over N bars with a midline. Breaks of either edge are breakout entries; the midline is the first pullback level. Range: Price scale.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1455,7 +1455,7 @@ export function DonchianChannel(asset: AssetArg, length: number = 20, interval: 
   return d as unknown as Indicator;
 }
 /**
- * Economic indicator.
+ * Macroeconomic data not tied to a specific asset.
  * @param metric The economic indicator to use
  */
 export function Economic(metric: "NonfarmPayrolls" | "UnemploymentRate" | "MoneySupply" | "TreasuryYield3Month" | "CPI"): Indicator {
@@ -1477,7 +1477,7 @@ export function ExponentialMovingAverage(asset: AssetArg, length: number, interv
 }
 export const EMA = ExponentialMovingAverage;
 /**
- * Exponentiation indicator.
+ * Raises an indicator to a specified power.
  * @param exponent The exponent to raise the value to
  */
 export function Exponentiation(operand: Indicator, exponent: number = 2): Indicator {
@@ -1487,7 +1487,7 @@ export function Exponentiation(operand: Indicator, exponent: number = 2): Indica
   return d as unknown as Indicator;
 }
 /**
- * Fundamental indicator.
+ * A financial metric from a company's statements or derived valuation ratios.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param metric The fundamental metric to use
  */
@@ -1498,7 +1498,7 @@ export function Fundamental(asset: AssetArg, metric: FundamentalMetric): Indicat
   return d as unknown as Indicator;
 }
 /**
- * GapPercentage indicator.
+ * The gap size expressed as a percentage of the previous close. Range: Unbounded (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function GapPercentage(asset: AssetArg): Indicator {
@@ -1507,7 +1507,7 @@ export function GapPercentage(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * GapSize indicator.
+ * The dollar difference between today's opening price and yesterday's closing price. Range: Unbounded.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function GapSize(asset: AssetArg): Indicator {
@@ -1516,7 +1516,7 @@ export function GapSize(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * HeikinAshi indicator.
+ * Heikin-Ashi candles built from COMPLETED one-minute bars in the regular session (9:30-15:59 bar opens; pre-market and after-hours bars are skipped), identically in backtests and live trading. The first bar seeds HA open = (O+C)/2 with its own high, low and close; after that HA close = (O+H+L+C)/4, HA open = (prior HA open + prior HA close)/2, HA high = max(H, HA open, HA close), HA low = min(L, HA open, HA close). The recursion carries across sessions and advances once per new bar. The streak line is the signed length of the current same-color run, counted from the color change (+3 on the third green candle, -3 on the third red); it reads 0 on a doji and for the rest of any run in which a candle shows an opposite-direction wick (a lower wick on green, an upper wick on red). Range: Price scale; streak is a signed integer.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param line Which one-minute Heikin-Ashi value to evaluate. streak is the signed length of the current same-color run (0 once it shows an opposite-direction wick, and on a doji)
  */
@@ -1527,7 +1527,7 @@ export function HeikinAshi(asset: AssetArg, line: "open" | "high" | "low" | "clo
   return d as unknown as Indicator;
 }
 /**
- * HighOfDay indicator.
+ * The highest price reached during the current trading session. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function HighOfDay(asset: AssetArg): Indicator {
@@ -1536,7 +1536,7 @@ export function HighOfDay(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * IchimokuCloud indicator.
+ * Five-line trend system: Tenkan and Kijun midpoints, Senkou A/B cloud bands, and the Chikou lagging line. Lines are evaluated unshifted. Price above the cloud with Tenkan above Kijun is the full bullish alignment. Range: Price scale.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1552,7 +1552,7 @@ export function IchimokuCloud(asset: AssetArg, length: number = 9, interval: Int
   return d as unknown as Indicator;
 }
 /**
- * ImpliedVolatility indicator.
+ * Constant-maturity at-the-money implied volatility for the underlying, built from the options chain (near-target-DTE expirations, |delta|≈0.50 call/put average, linearly interpolated). Units are annualized decimals (0.25 = 25%). Used on each candidate of a dynamic rebalance over a broad universe (all US stocks, an index or a watchlist), it reads options chains with Greeks for every stock in that universe instead of one underlying, so the run is heavier than with a named ticker or a specific asset list. Range: > 0 (annualized decimal).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param dte Target constant-maturity tenor in calendar days (e.g. 30)
  */
@@ -1563,7 +1563,7 @@ export function ImpliedVolatility(asset: AssetArg, dte: number = 30): Indicator 
   return d as unknown as Indicator;
 }
 /**
- * Index indicator.
+ * Daily level for a market index or benchmark (e.g. VIX, SPX) from hydrated index price data — not a tradable equity price. Range: Unbounded (index points).
  * @param metric Ticker key matching hydrated index price data (add more in BigQuery + rehydrate as needed)
  */
 export function Index(metric: "VIX" | "SPX" | "NDX" | "DJI" | "RUT" | "SKEW" | "VVIX" | "USDBROAD" | "TNX" = "VIX"): Indicator {
@@ -1586,7 +1586,7 @@ export function IndicatorAtCondition(operand: Indicator, condition: Condition, s
   return d as unknown as Indicator;
 }
 /**
- * IndicatorAtEntry indicator.
+ * The value an indicator held at a matching fill of the asset. The entry anchor chooses the fill: LatestFill (the default) follows the most recent matching fill; HoldingEntry preserves the original holding entry when shares are added. The captured level stays fixed instead of rolling forward. In the form, a candidate-bound condition may leave the asset empty and the surrounding action supplies it; SDK code always passes the asset, using CANDIDATE inside a rebalance pipeline.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param side The side of the fill the value is anchored to
  * @param orderStatus Matches order events with this status
@@ -1601,7 +1601,7 @@ export function IndicatorAtEntry(operand: Indicator, asset: AssetArg, side: Side
   return d as unknown as Indicator;
 }
 /**
- * IndicatorAtMinutesAfterOpen indicator.
+ * Captures the first non-null evaluated indicator value at or after the configured number of minutes after market open. The captured value is then frozen until its next daily reset. A delayed evaluation can capture after the target minute.
  * @param minutesAfterOpen The number of minutes after market open to capture the indicator value
  */
 export function IndicatorAtMinutesAfterOpen(operand: Indicator, minutesAfterOpen: number = 30): Indicator {
@@ -1611,7 +1611,7 @@ export function IndicatorAtMinutesAfterOpen(operand: Indicator, minutesAfterOpen
   return d as unknown as Indicator;
 }
 /**
- * IndicatorExponentialMovingAverage indicator.
+ * Computes the Exponential Moving Average of any other indicator. TradingDay follows the input markets: crypto-only inputs use elapsed 24-hour days, including weekends, just like Day. Stock, option, mixed-market and asset-free expressions use confirmed exchange sessions. The window does not change intraday prices into daily closing prices. TradingMinute counts regular-session minutes the same way, so a 70 TradingMinute window at 9:45 reaches back to 3:06 PM on the prior session (the overnight gap is one step); crypto-only inputs use elapsed minutes. It allows at most 1439 minutes; use TradingDay for longer lookbacks. Indicators read every tick have no TradingMinute value outside regular hours, and windows over a ChartBar keep the value of its latest completed candle.
  * @param length Length of time
  * @param interval Unit of time
  */
@@ -1633,7 +1633,7 @@ export function IndicatorMaximum(operand: Indicator, length: number = 30, interv
   return d as unknown as Indicator;
 }
 /**
- * IndicatorMeanAbsoluteDeviation indicator.
+ * Computes the MAD of any indicator over a window. Less sensitive to outliers than standard deviation.
  * @param length Length of time
  * @param interval Unit of time
  */
@@ -1655,7 +1655,7 @@ export function IndicatorMinimum(operand: Indicator, length: number = 30, interv
   return d as unknown as Indicator;
 }
 /**
- * IndicatorRateOfChange indicator.
+ * The percentage change of any indicator over a window.
  * @param length Length of time
  * @param interval Unit of time
  */
@@ -1666,7 +1666,7 @@ export function IndicatorRateOfChange(operand: Indicator, length: number = 30, i
   return d as unknown as Indicator;
 }
 /**
- * IndicatorSimpleMovingAverage indicator.
+ * Computes the Simple Moving Average of any other indicator over a window. TradingDay follows the input markets: crypto-only inputs use elapsed 24-hour days, including weekends, just like Day. Stock, option, mixed-market and asset-free expressions use confirmed exchange sessions. The window does not change intraday prices into daily closing prices. TradingMinute counts regular-session minutes the same way, so a 70 TradingMinute window at 9:45 reaches back to 3:06 PM on the prior session (the overnight gap is one step); crypto-only inputs use elapsed minutes. It allows at most 1439 minutes; use TradingDay for longer lookbacks. Indicators read every tick have no TradingMinute value outside regular hours, and windows over a ChartBar keep the value of its latest completed candle.
  * @param length Length of time
  * @param interval Unit of time
  */
@@ -1677,7 +1677,7 @@ export function IndicatorSimpleMovingAverage(operand: Indicator, length: number 
   return d as unknown as Indicator;
 }
 /**
- * IndicatorStandardDeviation indicator.
+ * Computes the standard deviation of any indicator over a window.
  * @param length Length of time
  * @param interval Unit of time
  */
@@ -1715,14 +1715,14 @@ export function IndustryNewsSentiment(industry: "technology" | "financialService
   return d as unknown as Indicator;
 }
 /**
- * InitialValue indicator.
+ * The starting value of the portfolio when it was created or when the backtest began. Range: > 0.
  */
 export function InitialValue(): Indicator {
   const d: Record<string, unknown> = { type: "InitialValue" };
   return d as unknown as Indicator;
 }
 /**
- * InsiderTrades indicator.
+ * Disclosed purchases (code P, including open-market or private transactions), sales (code S), and a separate exact-owner AwardCount for code A issuer grants or other acquisitions over a trailing publication window. AcquisitionCount combines code P and code A as distinct acquisition signals for modeled follower strategies; awards are not reclassified as purchases or sales and do not prove vested common-share ownership. Exact-owner strategies use versioned common-share, call/put, and issuer-award evidence; exercises and warrants are excluded from tradable purchase signals. A signal becomes eligible when its filing is public, never on an earlier transaction date. Range: Dollars, shares, counts or budget percent; unknown owner/amendment coverage has no value.
  * @param asset Pass CANDIDATE in a dynamic rebalance pipeline.
  * @param ownerCik Exact nonzero SEC reporting owner CIK, up to 10 digits. Omit for a whole company (with issuerCik) or aggregate activity.
  * @param issuerCik Company CIK. With ownerCik, restricts that owner to this company. Alone, every reporting owner's events at this company, a joint filing counted once.
@@ -1740,7 +1740,7 @@ export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" |
   return d as unknown as Indicator;
 }
 /**
- * InstitutionalHoldings indicator.
+ * Institutional positions in the asset disclosed on SEC Form 13F. Naming a manager follows one institution; an empty manager reads every manager holding the asset (SDK code passes an empty string). Level metrics read the latest quarter whose filing became public on or before the evaluation date; change metrics compare it with the quarter before. Positions are never summed across quarters, and an amended filing replaces the original only from the moment the amendment became public. Range: Counts, shares, dollars or a top-5 share of holdings; 0 when no 13F naming the asset was public within the window.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param manager Optional: a CIK such as 1067983, or part of a manager's name such as Renaissance Technologies. Leave empty for every manager. A CIK is exact; a name can match several firms
  * @param metric Managers holding, shares or value held, concentration, or the change since the previous quarter
@@ -1757,7 +1757,7 @@ export function InstitutionalHoldings(asset: AssetArg, manager: string, metric: 
   return d as unknown as Indicator;
 }
 /**
- * IsAsset indicator.
+ * Returns 1 if the asset matches a specific symbol. Useful for including specific assets in multi-asset strategies.
  * @param matchAsset The specific asset to compare against (ex. UPRO, GLD)
  * @param asset Ticker name (ex. SPY, BTC)
  */
@@ -1768,7 +1768,7 @@ export function IsAsset(matchAsset: AssetArg, asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * IsAssetType indicator.
+ * Returns 1 if the asset matches Stock, Cryptocurrency, Option or Other, and 0 otherwise. ETFs are Stock assets; use separate stock metadata or a universe filter to select ETFs.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param assetType The asset type to check against
  */
@@ -1779,7 +1779,7 @@ export function IsAssetType(asset: AssetArg, assetType: AssetType = "Stock"): In
   return d as unknown as Indicator;
 }
 /**
- * IsIndexMember indicator.
+ * Returns 1 if the asset is a member of a specified index, 0 otherwise.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param index The index to check membership against
  */
@@ -1790,7 +1790,7 @@ export function IsIndexMember(asset: AssetArg, index: "SP500" | "NASDAQ100" | "D
   return d as unknown as Indicator;
 }
 /**
- * IsIndustry indicator.
+ * Returns 1 if the asset belongs to a specified industry, 0 otherwise. Over 100 categories supported including Artificial Intelligence, Semiconductor, Electric Vehicles, Space Exploration, Healthcare, Biotechnology, Cloud Computing, Cybersecurity, Renewable Energy, and many more.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param industry The industry to check membership against
  */
@@ -1801,7 +1801,7 @@ export function IsIndustry(asset: AssetArg, industry: "technology" | "financialS
   return d as unknown as Indicator;
 }
 /**
- * IsNotAsset indicator.
+ * Returns 1 if the asset does NOT match a specific symbol. Useful for excluding specific assets.
  * @param matchAsset The specific asset to compare against (ex. UPRO, GLD)
  * @param asset Ticker name (ex. SPY, BTC)
  */
@@ -1812,7 +1812,7 @@ export function IsNotAsset(matchAsset: AssetArg, asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * IVHVRatio indicator.
+ * Constant-maturity ATM implied volatility divided by annualized close-to-close realized volatility (HV) over hvWindow trading days. Values > 1 mean options are pricing more vol than recently realized. Used on each candidate of a dynamic rebalance over a broad universe (all US stocks, an index or a watchlist), it reads options chains with Greeks for every stock in that universe instead of one underlying, so the run is heavier than with a named ticker or a specific asset list. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param hvWindow Trading days of log-return history for realized volatility
  */
@@ -1823,7 +1823,7 @@ export function IVHVRatio(asset: AssetArg, hvWindow: number = 20): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * IVPercentile indicator.
+ * Percent of sessions in the lookback window whose constant-maturity ATM IV was strictly below today's (0–100). Distinct from IV Rank. Used on each candidate of a dynamic rebalance over a broad universe (all US stocks, an index or a watchlist), it reads options chains with Greeks for every stock in that universe instead of one underlying, so the run is heavier than with a named ticker or a specific asset list. Range: 0–100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1835,7 +1835,7 @@ export function IVPercentile(asset: AssetArg, length: number = 252, interval: In
   return d as unknown as Indicator;
 }
 /**
- * IVRank indicator.
+ * Where today's constant-maturity ATM IV sits between the lookback window's high and low: (IV − IV_low) / (IV_high − IV_low) × 100. Distinct from IV Percentile. Used on each candidate of a dynamic rebalance over a broad universe (all US stocks, an index or a watchlist), it reads options chains with Greeks for every stock in that universe instead of one underlying, so the run is heavier than with a named ticker or a specific asset list. Range: 0–100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1847,7 +1847,7 @@ export function IVRank(asset: AssetArg, length: number = 252, interval: Interval
   return d as unknown as Indicator;
 }
 /**
- * KeltnerChannel indicator.
+ * EMA midline with ATR bands above and below. Tighter than Bollinger in calm tape, so closes outside the bands mean stronger conviction moves. Range: Price scale.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1872,7 +1872,7 @@ export function LastDividend(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * LastOrderPrice indicator.
+ * The execution price of the most recent order matching the specified filters. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param side Matches order events with this side (buy or sell)
  * @param orderStatus Matches order events with this status
@@ -1885,7 +1885,7 @@ export function LastOrderPrice(asset: AssetArg, side: Side, orderStatus: OrderSt
   return d as unknown as Indicator;
 }
 /**
- * Log indicator.
+ * Logarithm of an indicator with a specified base.
  * @param base The base for the logarithm
  */
 export function Log(operand: Indicator, base: number = 10): Indicator {
@@ -1895,7 +1895,7 @@ export function Log(operand: Indicator, base: number = 10): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * LowOfDay indicator.
+ * The lowest price reached during the current trading session. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function LowOfDay(asset: AssetArg): Indicator {
@@ -1904,7 +1904,7 @@ export function LowOfDay(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Max indicator.
+ * The maximum value of two or more indicators. The SDK builder takes exactly two operands; nest it to compare more.
  */
 export function Max(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Max" };
@@ -1912,7 +1912,7 @@ export function Max(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * MaxDrawdown indicator.
+ * The largest peak-to-trough percentage decline of the asset's price inside the window, reported as a positive number: 10 means a 10% fall from a high to a later low, and 0 means the price never fell below an earlier price in the window. Measures worst-case downside risk. Range: 0 to 100 (percent, never negative).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1924,7 +1924,7 @@ export function MaxDrawdown(asset: AssetArg, length: number = 30, interval: Inte
   return d as unknown as Indicator;
 }
 /**
- * MaxDrawup indicator.
+ * The maximum trough-to-peak percentage increase over a window. Range: >= 0 (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1936,7 +1936,7 @@ export function MaxDrawup(asset: AssetArg, length: number = 30, interval: Interv
   return d as unknown as Indicator;
 }
 /**
- * MaximumPrice indicator.
+ * The highest of the asset's observed prices over a window, including the current one. Each observation is the price at that time (a completed day contributes its close, a completed minute its closing price), not an intrabar high. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1948,7 +1948,7 @@ export function MaximumPrice(asset: AssetArg, length: number = 30, interval: Int
   return d as unknown as Indicator;
 }
 /**
- * Min indicator.
+ * The minimum value of two or more indicators. The SDK builder takes exactly two operands; nest it to compare more.
  */
 export function Min(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Min" };
@@ -1956,7 +1956,7 @@ export function Min(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * MinimumPrice indicator.
+ * The lowest of the asset's observed prices over a window, including the current one. Each observation is the price at that time (a completed day contributes its close, a completed minute its closing price), not an intrabar low. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -1968,7 +1968,7 @@ export function MinimumPrice(asset: AssetArg, length: number = 30, interval: Int
   return d as unknown as Indicator;
 }
 /**
- * Minus indicator.
+ * Difference between indicators.
  */
 export function Minus(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Minus" };
@@ -1976,7 +1976,7 @@ export function Minus(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * MinuteBarHigh indicator.
+ * The high of the most recently COMPLETED one-minute bar. The bar that opens at 9:30 is readable from 9:31, identically in backtests and live trading; the forming bar is never used. Not the day's high (use High of Day). Pre-market and after-hours bars count. Strategies using it run on one-minute data. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function MinuteBarHigh(asset: AssetArg): Indicator {
@@ -1985,7 +1985,7 @@ export function MinuteBarHigh(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * MinuteBarLow indicator.
+ * The low of the most recently COMPLETED one-minute bar. The bar that opens at 9:30 is readable from 9:31, identically in backtests and live trading; the forming bar is never used. Not the day's low (use Low of Day). Pre-market and after-hours bars count. Strategies using it run on one-minute data. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function MinuteBarLow(asset: AssetArg): Indicator {
@@ -1994,21 +1994,21 @@ export function MinuteBarLow(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * MinutesAfterOpen indicator.
+ * Whole minutes since the regular US market open (9:30 AM ET), read from the Eastern clock. The value is not clamped to the session: it is negative before the open and keeps rising above 390 after the 4:00 PM close. Range: 0 to 390 during a regular session; negative before 9:30 AM ET and above 390 after the close.
  */
 export function MinutesAfterOpen(): Indicator {
   const d: Record<string, unknown> = { type: "MinutesAfterOpen" };
   return d as unknown as Indicator;
 }
 /**
- * MinutesSinceAgent indicator.
+ * The number of minutes since an AI agent was launched by this strategy. Useful for fine-grained rate-limiting of agent launches within a single day. Range: >= 0.
  */
 export function MinutesSinceAgent(): Indicator {
   const d: Record<string, unknown> = { type: "MinutesSinceAgent" };
   return d as unknown as Indicator;
 }
 /**
- * MinutesSinceAlert indicator.
+ * The number of minutes since an alert was triggered. Useful for fine-grained rate-limiting of alerts within a single day. Range: >= 0.
  * @param message (Optional) Message to display when the indicator is triggered
  */
 export function MinutesSinceAlert(message: string): Indicator {
@@ -2017,7 +2017,7 @@ export function MinutesSinceAlert(message: string): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * MinutesSinceOptionOrder indicator.
+ * The number of minutes since the most recent option order matching the specified filters. Same filters as Days Since Option Order but measured in minutes for intraday strategies. Range: >= 0 (minutes), or a large number if no matching order exists.
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2040,7 +2040,7 @@ export function MinutesSinceOptionOrder(underlying: string, optionType: OptionTy
   return d as unknown as Indicator;
 }
 /**
- * MinutesSinceOrder indicator.
+ * Same as Days Since Order but measured in minutes. Useful for intraday strategies. Range: >= 0 (minutes).
  * @param assets Ticker(s) whose orders are counted. One string or an array.
  * @param side Buy or Sell
  * @param clock Optional elapsed-time clock; omitted retains calendar minutes.
@@ -2054,14 +2054,14 @@ export function MinutesSinceOrder(assets: AssetArg | AssetArg[], side: Side, ord
   return d as unknown as Indicator;
 }
 /**
- * MinutesUntilClose indicator.
+ * Whole minutes until the US equity session close, read from the Eastern clock. The close is that day's real session close, so an early-close day counts down to 1:00 PM ET instead of 4:00 PM. The value is not clamped to the session: it is negative after the close and above 390 before the 9:30 AM open. Range: 0 to 390 during a regular session (0 to 210 on a 1:00 PM early close); negative after the close and above 390 before the open.
  */
 export function MinutesUntilClose(): Indicator {
   const d: Record<string, unknown> = { type: "MinutesUntilClose" };
   return d as unknown as Indicator;
 }
 /**
- * MoneyFlowIndex indicator.
+ * Volume-weighted RSI: money flow direction over N bars on a 0-100 scale. Above 80 is overbought, below 20 oversold. Requires volume data. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2073,14 +2073,14 @@ export function MoneyFlowIndex(asset: AssetArg, length: number = 14, interval: I
   return d as unknown as Indicator;
 }
 /**
- * Month indicator.
+ * The current month (1–12).
  */
 export function Month(): Indicator {
   const d: Record<string, unknown> = { type: "Month" };
   return d as unknown as Indicator;
 }
 /**
- * MovingAverageConvergenceDivergence indicator.
+ * MACD line (fast EMA minus slow EMA), its signal EMA, or the histogram (MACD minus signal). Classic trend/momentum indicator. Range: Positive or negative for all three lines, in price units: each is a difference of moving averages, not a price level.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param fastLength Period of the fast EMA
  * @param slowLength Period of the slow EMA (must exceed the fast length)
@@ -2099,7 +2099,7 @@ export function MovingAverageConvergenceDivergence(asset: AssetArg, fastLength: 
   return d as unknown as Indicator;
 }
 /**
- * Multiply indicator.
+ * Product of indicators.
  */
 export function Multiply(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Multiply" };
@@ -2107,7 +2107,7 @@ export function Multiply(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Negative indicator.
+ * Negates an indicator's value.
  */
 export function Negative(operand: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Negative" };
@@ -2115,7 +2115,7 @@ export function Negative(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * NewInsiderDisclosure indicator.
+ * True when a newly public Form 4 version matches the selected owner, issuer, role, instrument and action and awaits a strategy decision. Exact-owner corrections count as new versions. A company CIK without an owner watches every reporting owner at that company, and a joint filing fires once. A handled event does not fire again on later price ticks; unverified owner coverage has no value, and a company is only as covered as its least-covered matching owner. Range: 1 while a public Form 4 version awaits a decision; otherwise 0.
  * @param ownerCik Exact SEC reporting owner CIK. Omit for a whole company (with issuerCik) or aggregate Form 4 activity.
  * @param issuerCik Company CIK. With ownerCik, restricts that owner; alone, every reporting owner at this company, a joint filing once.
  * @param role The reporting owner's role.
@@ -2132,7 +2132,7 @@ export function NewInsiderDisclosure(ownerCik?: string, issuerCik?: string, role
   return d as unknown as Indicator;
 }
 /**
- * NewInstitutionalFiling indicator.
+ * True when an exact manager CIK has a newly public 13F filing or amendment this strategy has not handled. Each accession creates one decision; later price ticks do not repeat it. The current InstitutionalHoldings book still sets target positions. Range: 1 while a public filing awaits a decision; otherwise 0.
  * @param manager Exact numeric SEC manager CIK. A new 13F accession, including an amendment, triggers one decision.
  */
 export function NewInstitutionalFiling(manager: string): Indicator {
@@ -2141,7 +2141,7 @@ export function NewInstitutionalFiling(manager: string): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * NewPoliticalDisclosure indicator.
+ * True when a selected member has a newly public equity or option trade disclosure that this strategy has not handled. Corrections count when they become public. A handled disclosure does not fire again on later price ticks. Range: 1 while a new disclosure awaits a decision; otherwise 0.
  * @param memberId Exact Bioguide member ID, such as P000197.
  * @param instrument Equity or option disclosures, never both for a public bot arm.
  * @param disclosureAction Which newly public trade sides trigger a decision.
@@ -2167,14 +2167,14 @@ export function NewsSentiment(asset: AssetArg, measure: Measure = "Mean", lookba
   return d as unknown as Indicator;
 }
 /**
- * NewTradingWeek indicator.
+ * True on the first evaluated trading tick of an ISO week until the strategy makes a decision. A no-order decision still consumes that week, and live portfolios persist the decision through a restart. Use with an option disclosure trigger for modeled maintenance. Range: 1 while this week's first decision is pending; otherwise 0.
  */
 export function NewTradingWeek(): Indicator {
   const d: Record<string, unknown> = { type: "NewTradingWeek" };
   return d as unknown as Indicator;
 }
 /**
- * OnBalanceVolume indicator.
+ * Running total of signed volume: adds the bar's volume on up closes, subtracts on down closes. Rising OBV with flat price is accumulation. Range: Unbounded (cumulative).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param interval Bar interval the volume is accumulated on
  */
@@ -2185,7 +2185,7 @@ export function OnBalanceVolume(asset: AssetArg, interval: Interval = "Day"): In
   return d as unknown as Indicator;
 }
 /**
- * OpeningPrice indicator.
+ * The price of an asset at market open. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function OpeningPrice(asset: AssetArg): Indicator {
@@ -2194,7 +2194,7 @@ export function OpeningPrice(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * OptionCollateral indicator.
+ * Returns the total collateral locked across option spreads matching the filter. Range: 0 to ∞ (dollars).
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2209,7 +2209,7 @@ export function OptionCollateral(underlying: string, optionType: OptionType, dir
   return d as unknown as Indicator;
 }
 /**
- * OptionDaysHeld indicator.
+ * Returns the minimum or maximum days since entry across option spreads matching the filter. Range: 0 to ∞.
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2226,7 +2226,7 @@ export function OptionDaysHeld(underlying: string, optionType: OptionType, direc
   return d as unknown as Indicator;
 }
 /**
- * OptionDaysToExpiration indicator.
+ * Returns the minimum or maximum days to expiration across option spreads matching the filter. Range: 0 to 365+.
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2243,14 +2243,14 @@ export function OptionDaysToExpiration(underlying: string, optionType: OptionTyp
   return d as unknown as Indicator;
 }
 /**
- * OptionGrossExposurePercent indicator.
+ * Sum of absolute option leg marks divided by portfolio value (percent). Matches gross deployment audits. Unfiltered portfolio-wide only. Range: 0% to ∞.
  */
 export function OptionGrossExposurePercent(): Indicator {
   const d: Record<string, unknown> = { type: "OptionGrossExposurePercent" };
   return d as unknown as Indicator;
 }
 /**
- * OptionPositionCount indicator.
+ * Returns the number of open option contract positions/legs matching the filter criteria. Portfolio-wide (no underlying, option type, direction, or spread filters): open legs plus legs reserved by earlier true OpenOption signals in the same tick's strategy loop. Filtered counts (e.g. per ticker) use open legs only. Use Option Spread Count for multi-leg spread groups. Range: 0 to ∞.
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2265,7 +2265,7 @@ export function OptionPositionCount(underlying: string, optionType: OptionType, 
   return d as unknown as Indicator;
 }
 /**
- * OptionPositionMaxDrawdown indicator.
+ * Peak-to-current drawdown of the aggregated P&L percentage across option spreads matching the filter. Stateful counterpart of the Option Position P&L% indicator (OptionPositionPercentChange): while that indicator returns the current P&L percentage, this one tracks the highest value observed and returns how far the position has fallen from that peak. Resets when no matching spreads remain so a fresh entry starts from a clean peak. Range: >= 0 (percentage points of P&L).
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2280,7 +2280,7 @@ export function OptionPositionMaxDrawdown(underlying: string, optionType: Option
   return d as unknown as Indicator;
 }
 /**
- * OptionPositionPercentChange indicator.
+ * Returns the weighted average P&L percentage across option spreads matching the filter. Range: -100% to ∞.
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2295,7 +2295,7 @@ export function OptionPositionPercentChange(underlying: string, optionType: Opti
   return d as unknown as Indicator;
 }
 /**
- * OptionPositionValue indicator.
+ * Returns the total market value of option spreads matching the filter criteria. Range: 0 to ∞ (dollars).
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2310,7 +2310,7 @@ export function OptionPositionValue(underlying: string, optionType: OptionType, 
   return d as unknown as Indicator;
 }
 /**
- * OptionRealizedPnL indicator.
+ * Returns the net realized P&L in dollars from CLOSED option positions matching the filter, long and short alike. Losing closes count as negative. Measures closes only and subtracts nothing for premium already spent. Lookback Days limits it to closes within that many days of the evaluation date; omit it for the whole life of the book. Range: -∞ to ∞ (dollars).
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2327,7 +2327,7 @@ export function OptionRealizedPnL(underlying: string, optionType: OptionType, di
   return d as unknown as Indicator;
 }
 /**
- * OptionRealizedPremium indicator.
+ * Returns realized option premium still available to spend: net realized P&L from closed short option positions, minus premium already spent by opens sized with Percent of Realized Premium. Proceeds from closing long options are not added back. This is the balance that allocation sizes against. It goes negative when closed shorts lost money, and a negative balance funds nothing. Lookback Days limits it to activity within that many days of the evaluation date; omit it for the whole life of the book. Range: -∞ to ∞ (dollars).
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param lookbackDays Only count activity within this many days of the evaluation date. Leave empty for the whole life of the book.
  */
@@ -2338,7 +2338,7 @@ export function OptionRealizedPremium(underlying: string, lookbackDays?: number)
   return d as unknown as Indicator;
 }
 /**
- * OptionSpreadCount indicator.
+ * Returns the number of distinct economic open multi-leg option spreads matching the filter criteria, deduplicating equal economic spread keys. Does not count standalone single-leg option positions. Range: 0 to ∞.
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2353,7 +2353,7 @@ export function OptionSpreadCount(underlying: string, optionType: OptionType, di
   return d as unknown as Indicator;
 }
 /**
- * OptionSpreadEntryPrice indicator.
+ * Returns the net price per share paid or collected to open the option spreads matching the filter: positive for a net debit, negative for a net credit. Several matching spreads average by contracts. Has no value when no matching spread is open. Use it as an option limit amount to price one spread off another spread's fill; wrap a credit spread's price in Absolute Value first, because a limit must be positive. Range: -∞ to ∞ (dollars per share).
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2368,7 +2368,7 @@ export function OptionSpreadEntryPrice(underlying: string, optionType: OptionTyp
   return d as unknown as Indicator;
 }
 /**
- * OptionUnrealizedPnL indicator.
+ * Returns the total unrealized P&L in dollars across option spreads matching the filter. Range: -∞ to ∞ (dollars).
  * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
  * @param optionType Filter by Call or Put. Leave empty for all.
  * @param direction Filter by Long or Short. Leave empty for all.
@@ -2383,7 +2383,7 @@ export function OptionUnrealizedPnL(underlying: string, optionType: OptionType, 
   return d as unknown as Indicator;
 }
 /**
- * ParabolicSar indicator.
+ * Trailing stop-and-reverse level that accelerates toward price as the trend extends. Price crossing the SAR flips the trend. Range: Price scale.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param interval Bar interval the SAR trails on
  * @param step AF increment per new extreme
@@ -2398,7 +2398,7 @@ export function ParabolicSar(asset: AssetArg, interval: Interval = "Day", step: 
   return d as unknown as Indicator;
 }
 /**
- * Plus indicator.
+ * Sum of two or more indicators. The SDK builder takes exactly two operands; nest it to add more.
  */
 export function Plus(left: Indicator, right: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "Plus" };
@@ -2406,7 +2406,7 @@ export function Plus(left: Indicator, right: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PoliticalPurchaseShare indicator.
+ * A member's publicly known equity or option purchase dollars divided by the sum of both, across all disclosed tickers. Event versions enter only when public. Unclassified instruments are excluded. purchaseScope defaults to AllPurchases for historical flow. RemainingLots sums surviving original purchase costs after reported full sales and exercises, excluding unresolved ticker buckets. Unknown partial quantities retain their estimate. Neither setting is current market value or verified holdings. Range: 0 to 100 percent; zero before a qualifying purchase.
  * @param memberId Bioguide member id, for example P000197. The share uses the member's whole public purchase record.
  * @param instrument Which side of the equity/option purchase mix to return, as a percent from 0 to 100.
  * @param amountBasis Estimate for disclosed purchase ranges. Midpoint is the default.
@@ -2421,7 +2421,7 @@ export function PoliticalPurchaseShare(memberId: string, instrument: Instrument2
   return d as unknown as Indicator;
 }
 /**
- * PoliticalTrades indicator.
+ * Trades by members of Congress in the asset, from the unified House and Senate disclosure lake, over a trailing window. A trade counts from the moment its report became public, never its trade date, and an amended report changes a value only from the moment the amendment became public. Amount metrics can use the lower, midpoint, or upper end of every disclosed range. Equity disclosures are the default; confirmed option disclosures can be selected separately for numeric activity. Held requires Equity and reads the member's whole public record instead: 1 while their latest equity disclosure for the asset is a purchase or partial sale, 0 after a full sale. Held is a disclosure signal, not verified holdings or share quantity. RemainingBuyAmount reads the full public history and sums original purchase ranges of remaining lots after full sales and exercises. Unknown partial quantities retain their purchase amount estimate; sale proceeds are never subtracted. This is estimated remaining cost, not current market value. Printed expirations identify lots but do not implicitly end modeled renewal exposure. Range: Disclosed amount-range values or counts over the window, or 1/0 for Held; 0 when no matching trade was disclosed.
  * @param asset Pass CANDIDATE inside a rebalance pipeline to bind each stock.
  * @param filer Member full or last name. Pass an empty string for all members.
  * @param metric Amount-range aggregate, event count, distinct purchasing members, RemainingBuyAmount (surviving original purchase amounts; ignores window; unknown partial quantities retained), or Held: 1 while the member still holds the asset (latest public disclosure is a purchase or partial sale), ignoring the window.
@@ -2444,7 +2444,7 @@ export function PoliticalTrades(asset: AssetArg, filer: string, metric: "NetAmou
   return d as unknown as Indicator;
 }
 /**
- * PortfolioValue indicator.
+ * The total current value of your portfolio (cash + all positions). Range: >= 0.
  */
 export function PortfolioValue(): Indicator {
   const d: Record<string, unknown> = { type: "PortfolioValue" };
@@ -2460,7 +2460,7 @@ export function PositionEntryPrice(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PositionMaxDrawdown indicator.
+ * The maximum percentage decline in the position's unrealized P&L from its peak. Aggregates the stock or crypto holding plus all option spreads on that underlying. Returns 0 at a new high water mark; rises as P&L falls below the peak, so it is never negative. Range: >= 0 (percentage points of P&L).
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function PositionMaxDrawdown(asset: AssetArg): Indicator {
@@ -2469,7 +2469,7 @@ export function PositionMaxDrawdown(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PositionMaxDrawup indicator.
+ * The percentage increase of the asset's current market price from the lowest price observed by this indicator. Share purchases and sales do not change the calculation; it does not use position cost basis. Range: >= 0 (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function PositionMaxDrawup(asset: AssetArg): Indicator {
@@ -2496,7 +2496,7 @@ export function PositionPeakPrice(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PositionPercentChange indicator.
+ * How much your position has gained or lost as a percentage since you opened it. Range: Unbounded (percentage).
  * @param assets Ticker name (ex. SPY, BTC)
  */
 export function PositionPercentChange(assets: AssetArg | AssetArg[]): Indicator {
@@ -2505,7 +2505,7 @@ export function PositionPercentChange(assets: AssetArg | AssetArg[]): Indicator 
   return d as unknown as Indicator;
 }
 /**
- * PositionValue indicator.
+ * The current dollar value of your position in one or more assets. Range: >= 0.
  * @param assets Ticker name (ex. SPY, BTC)
  */
 export function PositionValue(assets: AssetArg | AssetArg[]): Indicator {
@@ -2514,7 +2514,7 @@ export function PositionValue(assets: AssetArg | AssetArg[]): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PreviousClosingPrice indicator.
+ * The closing price from the previous trading session. It already has a one-session offset; wrapping it in Indicator Window Ago adds another lag rather than selecting that same previous close. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function PreviousClosingPrice(asset: AssetArg): Indicator {
@@ -2523,7 +2523,7 @@ export function PreviousClosingPrice(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Price indicator.
+ * The current market price of any asset. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function Price(asset: AssetArg): Indicator {
@@ -2532,7 +2532,7 @@ export function Price(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PriceChangeSinceOpen indicator.
+ * The dollar change in price since market open. Range: Unbounded.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function PriceChangeSinceOpen(asset: AssetArg): Indicator {
@@ -2541,7 +2541,7 @@ export function PriceChangeSinceOpen(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * PriceMeanAbsoluteDeviation indicator.
+ * The mean absolute deviation of an asset's price over a window. Similar to standard deviation but less sensitive to outliers. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2553,7 +2553,7 @@ export function PriceMeanAbsoluteDeviation(asset: AssetArg, length: number = 30,
   return d as unknown as Indicator;
 }
 /**
- * PriceRateOfChange indicator.
+ * Measures the percentage change in price between the current price and the price N periods ago. Range: Unbounded (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2565,7 +2565,7 @@ export function PriceRateOfChange(asset: AssetArg, length: number = 30, interval
   return d as unknown as Indicator;
 }
 /**
- * PriceStandardDeviation indicator.
+ * The standard deviation of an asset's closing price over a window. Measures price volatility. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2578,7 +2578,7 @@ export function PriceStandardDeviation(asset: AssetArg, length: number = 30, int
 }
 export const PriceStdDev = PriceStandardDeviation;
 /**
- * RebalanceDecisionMetric indicator.
+ * Exposes the allocation plan that a DynamicRebalance or RebalanceOption action is about to execute, so the strategy condition can decide whether that plan is worthwhile. Range: Drift and turnover are portfolio fractions; cost and benefit metrics are dollar amounts.
  * @param metric Reads the prospective plan calculated by DynamicRebalance or RebalanceOption before the strategy condition runs.
  */
 export function RebalanceDecisionMetric(metric: "allocationDrift" | "plannedTurnover" | "estimatedCost" | "expectedBenefit" | "netBenefit" = "netBenefit"): Indicator {
@@ -2587,7 +2587,7 @@ export function RebalanceDecisionMetric(metric: "allocationDrift" | "plannedTurn
   return d as unknown as Indicator;
 }
 /**
- * RelativeStrengthIndex indicator.
+ * Measures the speed and magnitude of recent price changes. Oscillates between 0 and 100. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2600,7 +2600,7 @@ export function RelativeStrengthIndex(asset: AssetArg, length: number = 30, inte
 }
 export const RSI = RelativeStrengthIndex;
 /**
- * RelativeVolume indicator.
+ * Current bar volume divided by the average volume of the trailing N completed bars. 1.0 means the bar is trading exactly its recent pace. Range: >= 0 (ratio around 1.0).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2625,7 +2625,7 @@ export function SimpleMovingAverage(asset: AssetArg, length: number = 30, interv
 }
 export const SMA = SimpleMovingAverage;
 /**
- * SquareRoot indicator.
+ * Square root of an indicator.
  */
 export function SquareRoot(operand: Indicator): Indicator {
   const d: Record<string, unknown> = { type: "SquareRoot" };
@@ -2633,7 +2633,7 @@ export function SquareRoot(operand: Indicator): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Stochastic indicator.
+ * Momentum oscillator comparing the close to the high-low range over N bars, with %K smoothing and a %D signal average. Readings above 80 are overbought, below 20 oversold. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2660,7 +2660,7 @@ export function StockReport(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * SumOrderAmount indicator.
+ * The total dollar amount across all matching orders within a window. Range: >= 0.
  * @param side Matches order events with this side (buy or sell)
  * @param orderStatus Matches order events with this status
  * @param length Length of time
@@ -2676,7 +2676,7 @@ export function SumOrderAmount(side: Side, orderStatus: OrderStatus = "Filled", 
   return d as unknown as Indicator;
 }
 /**
- * SumOrderQuantity indicator.
+ * The total number of shares across all matching orders within a window. Range: >= 0.
  * @param side Matches order events with this side (buy or sell)
  * @param orderStatus Matches order events with this status
  * @param length Length of time
@@ -2692,7 +2692,7 @@ export function SumOrderQuantity(side: Side, orderStatus: OrderStatus = "Filled"
   return d as unknown as Indicator;
 }
 /**
- * Supertrend indicator.
+ * ATR trailing band that ratchets with the trend and flips sides on a close through it. The direction line reads +1 in an uptrend, -1 in a downtrend. Range: Price scale (value); +1 / -1 (direction).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2708,7 +2708,7 @@ export function Supertrend(asset: AssetArg, length: number = 10, interval: Inter
   return d as unknown as Indicator;
 }
 /**
- * TrailingSum indicator.
+ * The sum of the last N accepted observations of the inner indicator. Generic inputs append when the value changes; source-backed inputs use their own observation identities. Length counts retained observations rather than every evaluation tick.
  * @param length Length of the rolling window
  */
 export function TrailingSum(operand: Indicator, length: number = 4): Indicator {
@@ -2718,7 +2718,7 @@ export function TrailingSum(operand: Indicator, length: number = 4): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * TrueRange indicator.
+ * The greatest of: current high minus low, |high − previous close|, or |low − previous close|. Measures single-period volatility. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function TrueRange(asset: AssetArg): Indicator {
@@ -2727,7 +2727,7 @@ export function TrueRange(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * UnderlyingMaxDrawdown indicator.
+ * The current percentage decline of the asset's market price from the highest price observed by this indicator. Tracks the underlying price independently of position state. Range: 0 to 100 (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function UnderlyingMaxDrawdown(asset: AssetArg): Indicator {
@@ -2736,7 +2736,7 @@ export function UnderlyingMaxDrawdown(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Value indicator.
+ * A fixed numeric value. Useful as one side of a comparison.
  * @param value Constant value
  */
 export function Value(value: number = 0): Indicator {
@@ -2745,7 +2745,7 @@ export function Value(value: number = 0): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Volume indicator.
+ * Trading volume for the asset. It is the Fundamental indicator with its metric preset to Volume, on the same pipeline and data sources. Keep the metric at Volume: any other metric returns that fundamental metric instead of volume. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param metric The fundamental metric to use
  */
@@ -2756,7 +2756,7 @@ export function Volume(asset: AssetArg, metric: FundamentalMetric = "volume"): I
   return d as unknown as Indicator;
 }
 /**
- * VWAP indicator.
+ * The average price weighted by volume throughout the trading session. A key intraday benchmark. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function VWAP(asset: AssetArg): Indicator {
@@ -2765,7 +2765,7 @@ export function VWAP(asset: AssetArg): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * WilliamsR indicator.
+ * Momentum oscillator placing the close within the high-low range over N bars, on a -100 to 0 scale. Above -20 is overbought, below -80 oversold. Range: -100 to 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
  * @param interval Unit of time
@@ -2777,7 +2777,7 @@ export function WilliamsR(asset: AssetArg, length: number = 14, interval: Interv
   return d as unknown as Indicator;
 }
 /**
- * Year indicator.
+ * The current year.
  */
 export function Year(): Indicator {
   const d: Record<string, unknown> = { type: "Year" };
