@@ -17,6 +17,7 @@ import {
   NexusTradeClient,
   type JsonObject,
   type JsonValue,
+  type PublicApiTransport,
   type RequestOptions,
   type Transport,
 } from "../src/client.ts";
@@ -74,6 +75,23 @@ const WAIT_METHODS = new Set([
   "wait_for_optimization",
   "wait_for_walk_forward",
 ]);
+// Public REST reads go through `getPublicApi`, recorded with an absolute
+// `/api/...` path so they cannot be mistaken for a versioned SDK route. Their
+// filters are one options bag; `input` is null when a method takes none.
+const PUBLIC_API_METHODS = new Set([
+  "list_congressional_trades",
+  "get_congressional_trade_summary",
+  "get_congressional_leaderboard",
+  "list_congressional_filing_latency",
+  "list_congressional_trade_volume",
+  "get_politician",
+  "get_politician_bot",
+  "list_congressional_filers",
+  "get_congressional_filer",
+  "get_congressional_trade",
+  "get_congressional_filing",
+  "get_congressional_coverage",
+]);
 
 function snakeToCamel(name: string): string {
   return name.replace(/_([a-z0-9])/g, (_, character: string) =>
@@ -81,7 +99,7 @@ function snakeToCamel(name: string): string {
   );
 }
 
-class RecordingTransport implements Transport {
+class RecordingTransport implements Transport, PublicApiTransport {
   readonly calls: ExpectedCall[] = [];
   #responses: JsonObject[];
 
@@ -106,6 +124,10 @@ class RecordingTransport implements Transport {
     if (!next) throw new Error(`no scripted response for ${method} ${path}`);
     return next;
   }
+
+  async getPublicApi(path: string): Promise<JsonObject> {
+    return this.request("GET", `/api/${path}`);
+  }
 }
 
 function invoke(
@@ -123,6 +145,11 @@ function invoke(
   const leading = testCase.args ?? [];
   if (NO_ARG_METHODS.has(testCase.method)) {
     return call.call(client);
+  }
+  if (PUBLIC_API_METHODS.has(testCase.method)) {
+    return testCase.input === null
+      ? call.call(client, ...leading)
+      : call.call(client, ...leading, testCase.input);
   }
   if (WAIT_METHODS.has(testCase.method)) {
     return call.call(client, ...leading, testCase.input, {

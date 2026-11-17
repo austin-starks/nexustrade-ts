@@ -216,6 +216,61 @@ describe("HttpTransport", () => {
     );
   });
 
+  it("reads the public REST API beside the versioned path without a workspace", async () => {
+    const calls = stubFetch(() => jsonResponse({ data: { trades: [] } }));
+
+    const page = await new NexusTradeClient({
+      transport: new HttpTransport({ baseUrl: BASE_URL }),
+    }).listCongressionalTrades({ ticker: "NVDA", limit: 2 });
+
+    assert.deepEqual(page.data.trades, []);
+    assert.equal(calls.length, 1);
+    assert.equal(
+      calls[0].url,
+      "https://gateway.example/api/political-disclosures/trades?ticker=NVDA&limit=2",
+    );
+    const headers = calls[0].init.headers as Record<string, string>;
+    assert.equal(headers.Authorization, undefined);
+    assert.equal(headers["X-NexusTrade-Session"], undefined);
+  });
+
+  it("sends the API key to public REST routes and surfaces their plain message", async () => {
+    const calls = stubFetch(() =>
+      jsonResponse({ message: "Not authenticated." }, 401),
+    );
+
+    await assert.rejects(
+      () =>
+        new HttpTransport({ apiKey: "sk-temp", baseUrl: BASE_URL }).getPublicApi(
+          "political-disclosures/coverage",
+        ),
+      (error: unknown) => {
+        assert.ok(error instanceof NexusTradeApiError);
+        assert.equal(error.status, 401);
+        assert.equal(error.code, "api_error");
+        assert.match(error.message, /Not authenticated\./);
+        return true;
+      },
+    );
+    const headers = calls[0].init.headers as Record<string, string>;
+    assert.equal(headers.Authorization, "Bearer sk-temp");
+  });
+
+  it("refuses congressional reads on a transport without public REST support", async () => {
+    const client = new NexusTradeClient({
+      transport: { request: async () => ({}) },
+    });
+
+    await assert.rejects(
+      () => client.getCongressionalCoverage(),
+      (error: unknown) => {
+        assert.ok(error instanceof NexusTradeApiError);
+        assert.equal(error.code, "unsupported_transport");
+        return true;
+      },
+    );
+  });
+
   it("maps HTTP errors to a stable API error", async () => {
     stubFetch(() =>
       jsonResponse(

@@ -6,6 +6,27 @@
  */
 
 import { AgentRun } from "./agent.ts";
+import {
+  congressionalQueryParams,
+  type CongressChamber,
+  type CongressionalCoverage,
+  type CongressionalEnvelope,
+  type CongressionalFiler,
+  type CongressionalFilerDetail,
+  type CongressionalFilerListOptions,
+  type CongressionalFilerVolume,
+  type CongressionalFiling,
+  type CongressionalFilingLatency,
+  type CongressionalLeaderboard,
+  type CongressionalMemberRecordOptions,
+  type CongressionalTradeDetail,
+  type CongressionalTradeFilters,
+  type CongressionalTradePage,
+  type CongressionalTradeSummary,
+  type ListCongressionalTradesOptions,
+  type PoliticianBot,
+  type PoliticianProfile,
+} from "./congress.ts";
 import { LazyDotenv, environmentValue } from "./env.ts";
 import type {
   JobRequest,
@@ -329,6 +350,35 @@ function supportsUpload(transport: Transport): transport is UploadTransport {
   return typeof (transport as UploadTransport).putBytes === "function";
 }
 
+/**
+ * Transports that can read NexusTrade's public REST API.
+ *
+ * Those routes are served at `/api/<path>` on the API origin, beside the
+ * versioned SDK routes rather than under them. `path` is relative to `/api/`.
+ * An API key is sent when the transport holds one; an anonymous workspace
+ * session is never sent, because these routes do not read it.
+ */
+export interface PublicApiTransport extends Transport {
+  getPublicApi(path: string): Promise<JsonObject>;
+}
+
+function supportsPublicApi(
+  transport: Transport
+): transport is PublicApiTransport {
+  return typeof (transport as PublicApiTransport).getPublicApi === "function";
+}
+
+async function readPublicApi<T>(transport: Transport, path: string): Promise<T> {
+  if (!supportsPublicApi(transport)) {
+    throw new NexusTradeApiError(
+      NO_HTTP_STATUS,
+      "unsupported_transport",
+      "Congressional trade reads require HttpTransport.getPublicApi."
+    );
+  }
+  return (await transport.getPublicApi(path)) as unknown as T;
+}
+
 export interface HttpTransportOptions {
   apiKey?: string;
   baseUrl: string;
@@ -478,6 +528,9 @@ async function apiErrorFromResponse(
       const body = errorBody as JsonObject;
       if (body.code) code = String(body.code);
       if (body.message) message = String(body.message);
+    } else if (typeof decoded.message === "string" && decoded.message) {
+      // Public REST routes answer `{ message }` with no error envelope.
+      message = decoded.message;
     }
   } catch {
     // Non-JSON error bodies keep the transport-level code/message.
@@ -496,6 +549,10 @@ function workspaceSessionUrl(baseUrl: string): string {
   return parsed.toString();
 }
 
+function publicApiUrl(baseUrl: string, path: string): string {
+  return `${new URL(baseUrl).origin}/api/${path.replace(/^\/+/, "")}`;
+}
+
 export interface WorkspaceSessionTransport extends Transport {
   exportWorkspaceSession(): string | undefined;
   importWorkspaceSession(workspaceSession: string): void;
@@ -512,7 +569,11 @@ function supportsWorkspaceSession(
 }
 
 export class HttpTransport
-  implements Transport, UploadTransport, WorkspaceSessionTransport
+  implements
+    Transport,
+    UploadTransport,
+    WorkspaceSessionTransport,
+    PublicApiTransport
 {
   // `#` fields, not TS `private` — the credential must be unreachable at
   // runtime too, matching the Python dataclass's `repr=False`.
@@ -718,7 +779,23 @@ export class HttpTransport
     if (options.idempotencyKey !== undefined) {
       headers["Idempotency-Key"] = options.idempotencyKey;
     }
+    return this.#send(method, url, headers, payload);
+  }
 
+  async getPublicApi(path: string): Promise<JsonObject> {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (this.#apiKey !== undefined) {
+      headers.Authorization = `Bearer ${this.#apiKey}`;
+    }
+    return this.#send("GET", publicApiUrl(this.#baseUrl, path), headers);
+  }
+
+  async #send(
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    payload?: string
+  ): Promise<JsonObject> {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
@@ -2290,6 +2367,163 @@ export class NexusTradeClient {
       screenId,
       options
     );
+  }
+
+  /**
+   * Congressional trade disclosures, newest first. No API key required.
+   *
+   * Defaults to equities first made public in the 30 days ending on the
+   * dataset's last update day. `fromDate` and `toDate` filter on
+   * `firstAvailableAt`. Trade from `availableAt`, when the disclosure became
+   * public, never `transactionDate`.
+   */
+  async listCongressionalTrades(
+    options: ListCongressionalTradesOptions = {}
+  ): Promise<CongressionalEnvelope<CongressionalTradePage>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/trades${encodeQuery(
+        congressionalQueryParams(options)
+      )}`
+    );
+  }
+
+  /** Purchase and sale totals over the same filters as the feed. No API key required. */
+  async getCongressionalTradeSummary(
+    filters: CongressionalTradeFilters = {}
+  ): Promise<CongressionalEnvelope<CongressionalTradeSummary>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/summary${encodeQuery(
+        congressionalQueryParams(filters)
+      )}`
+    );
+  }
+
+  /** Members ranked by their copy bot's cached backtest against SPY. No API key required. */
+  async getCongressionalLeaderboard(
+    options: { limit?: number } = {}
+  ): Promise<CongressionalLeaderboard> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/leaderboard${encodeQuery({
+        limit: options.limit === undefined ? undefined : String(options.limit),
+      })}`
+    );
+  }
+
+  /** Days from trade to public disclosure per member, slowest first. No API key required. */
+  async listCongressionalFilingLatency(
+    filters: CongressionalFilerListOptions = {}
+  ): Promise<CongressionalEnvelope<CongressionalFilingLatency[]>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/filer-latency${encodeQuery(
+        congressionalQueryParams(filters)
+      )}`
+    );
+  }
+
+  /** Disclosed dollar volume per member, largest first. No API key required. */
+  async listCongressionalTradeVolume(
+    filters: CongressionalFilerListOptions = {}
+  ): Promise<CongressionalEnvelope<CongressionalFilerVolume[]>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/filer-volume${encodeQuery(
+        congressionalQueryParams(filters)
+      )}`
+    );
+  }
+
+  /**
+   * One member's profile and whole trading record. No API key required.
+   *
+   * `id` is a Bioguide ID (`"P000197"`) or a page slug (`"nancy-pelosi"`).
+   * With neither date the record runs from 2012-01-01 to today, and
+   * `instrument` defaults to `"all"`.
+   */
+  async getPolitician(
+    id: string,
+    options: CongressionalMemberRecordOptions = {}
+  ): Promise<CongressionalEnvelope<PoliticianProfile>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/politicians/${encodePathSegment(id)}${encodeQuery(
+        congressionalQueryParams(options)
+      )}`
+    );
+  }
+
+  /** A member's copy bot and its cached backtest. No API key required. */
+  async getPoliticianBot(id: string): Promise<PoliticianBot> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/politicians/${encodePathSegment(id)}/bot`
+    );
+  }
+
+  /** Members with disclosures matching the filters. Requires an API key. */
+  async listCongressionalFilers(
+    filters: CongressionalFilerListOptions = {}
+  ): Promise<CongressionalEnvelope<CongressionalFiler[]>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/filers${encodeQuery(
+        congressionalQueryParams(filters)
+      )}`
+    );
+  }
+
+  /**
+   * One member's summary, activity and trades by Bioguide ID. Requires an API key.
+   *
+   * With neither date the record runs from 2012-01-01 to today, and
+   * `instrument` defaults to `"all"`.
+   */
+  async getCongressionalFiler(
+    filerKey: string,
+    options: CongressionalMemberRecordOptions = {}
+  ): Promise<CongressionalEnvelope<CongressionalFilerDetail>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/filers/${encodePathSegment(filerKey)}${encodeQuery(
+        congressionalQueryParams(options)
+      )}`
+    );
+  }
+
+  /** One disclosure with its amendment history. Requires an API key. */
+  async getCongressionalTrade(
+    eventId: string,
+    options: { asOf?: string } = {}
+  ): Promise<CongressionalEnvelope<CongressionalTradeDetail>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/trades/${encodePathSegment(eventId)}${encodeQuery({
+        asOf: options.asOf,
+      })}`
+    );
+  }
+
+  /** One source filing and every trade it disclosed. Requires an API key. */
+  async getCongressionalFiling(
+    chamber: CongressChamber,
+    docId: string
+  ): Promise<CongressionalEnvelope<CongressionalFiling>> {
+    return readPublicApi(
+      this.transport,
+      `political-disclosures/filings/${encodePathSegment(
+        chamber
+      )}/${encodePathSegment(docId)}`
+    );
+  }
+
+  /** How much of the public record the dataset holds. Requires an API key. */
+  async getCongressionalCoverage(): Promise<
+    CongressionalEnvelope<CongressionalCoverage>
+  > {
+    return readPublicApi(this.transport, "political-disclosures/coverage");
   }
 
   /** Resolve once a backtest is terminal. See `waitForOperation`. */
