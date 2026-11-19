@@ -3078,18 +3078,18 @@ export const geneEntryCooldownDays = (strategyIndex: number, values: number[]): 
 });
 
 /** Sweep ConditionWindowLength (Strategy scope) over a value set. */
-export const geneConditionWindowLength = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[]): Gene => ({
+export const geneConditionWindowLength = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[], indicatorPath?: number[]): Gene => ({
   field: "ConditionWindowLength",
   scope: "Strategy",
-  target: { scope: "Strategy", field: "ConditionWindowLength", strategyIndex, path, slot },
+  target: { scope: "Strategy", field: "ConditionWindowLength", strategyIndex, path, slot, ...(indicatorPath === undefined ? {} : { indicatorPath }) },
   values: values as unknown[],
 });
 
 /** Sweep ConditionThreshold (Strategy scope) over a value set. */
-export const geneConditionThreshold = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[]): Gene => ({
+export const geneConditionThreshold = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[], indicatorPath?: number[], parameter?: string): Gene => ({
   field: "ConditionThreshold",
   scope: "Strategy",
-  target: { scope: "Strategy", field: "ConditionThreshold", strategyIndex, path, slot },
+  target: { scope: "Strategy", field: "ConditionThreshold", strategyIndex, path, slot, ...(indicatorPath === undefined ? {} : { indicatorPath }), ...(parameter === undefined ? {} : { parameter }) },
   values: values as unknown[],
 });
 
