@@ -140,6 +140,27 @@ A cached single-name spec that omitted the baseline therefore runs once more
 after upgrading, because its benchmark is now part of the run's identity. The
 portfolio handle accepts the same typed benchmark: `PortfolioHandle.backtest({ baselineAsset })`.
 
+### Equity curve and fills
+
+The terminal `result.statistics` carries the aggregates (`percentChange`,
+`sharpeRatio`, `maxDrawdown`, `winRate`, `closedTradeCount`, `totalFees`).
+The curve and the individual fills are separate reads:
+
+```typescript
+const curve = await client.getBacktestHistory(backtestId, { pageSize: 5000 });
+// curve.points: time, value, cash, positionValue, comparisonValue, reservedCollateral
+// follow curve.nextPage until null
+
+const fills = await client.listBacktestEvents(backtestId, {
+  eventTypes: ["Order"],
+  orderStatuses: ["Filled"],
+});
+```
+
+History is retained for 30 days. Events exist only for a run submitted with
+`generateEvents: true` and are retained for 3 days; otherwise the call raises
+`events_unavailable`.
+
 ### Collateral at risk
 
 A terminal operation's `result.statistics` answers how much capital the run had
@@ -978,6 +999,8 @@ is missing here, so this list cannot drift from the code.
 | `getBacktest(backtestId)`                      | Read the operation         |
 | `waitForBacktest(backtestId, options)`         | Block until terminal       |
 | `waitForBacktests(operations, options)`        | Block on a whole batch     |
+| `getBacktestHistory(backtestId, options)`      | Equity curve, one page     |
+| `listBacktestEvents(backtestId, options)`      | Orders, fills and signals  |
 
 **Optimization and walk-forward**
 

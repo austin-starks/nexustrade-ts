@@ -161,6 +161,26 @@ export interface ListOrdersOptions {
   includeRebalanceOrders?: boolean;
 }
 
+export interface BacktestHistoryOptions {
+  page?: number;
+  /** Rows per page, at most 5000 (server default 500). */
+  pageSize?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface ListBacktestEventsOptions {
+  /** e.g. ["Order"]. Omit for every actionable event. */
+  eventTypes?: ReadonlyArray<string>;
+  /** Order events only, e.g. ["Filled"]. */
+  orderStatuses?: ReadonlyArray<string>;
+  ticker?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface ListPortfoliosOptions {
   portfolioIds?: string[];
   includeInactive?: boolean;
@@ -2270,6 +2290,45 @@ export class NexusTradeClient {
       `backtests/${encodePathSegment(backtestId)}`
     );
     return operationOf(response);
+  }
+
+  /** One page of a completed backtest's equity curve; follow `nextPage` until null. */
+  async getBacktestHistory(
+    backtestId: string,
+    options: BacktestHistoryOptions = {}
+  ): Promise<JsonObject> {
+    const query = encodeQuery({
+      page: options.page === undefined ? undefined : String(options.page),
+      page_size:
+        options.pageSize === undefined ? undefined : String(options.pageSize),
+      start_date: options.startDate,
+      end_date: options.endDate,
+    });
+    return this.transport.request(
+      "GET",
+      `backtests/${encodePathSegment(backtestId)}/history${query}`
+    );
+  }
+
+  /** One page of a backtest's event tape. The run needs `generateEvents: true`; traces last 3 days. */
+  async listBacktestEvents(
+    backtestId: string,
+    options: ListBacktestEventsOptions = {}
+  ): Promise<JsonObject> {
+    const query = encodeQuery({
+      event_types: options.eventTypes?.join(","),
+      order_statuses: options.orderStatuses?.join(","),
+      ticker: options.ticker,
+      start_date: options.startDate,
+      end_date: options.endDate,
+      page: options.page === undefined ? undefined : String(options.page),
+      page_size:
+        options.pageSize === undefined ? undefined : String(options.pageSize),
+    });
+    return this.transport.request(
+      "GET",
+      `backtests/${encodePathSegment(backtestId)}/events${query}`
+    );
   }
 
   /** Requires a registered API key; anonymous workspaces cannot optimize. */
