@@ -55,6 +55,8 @@ const CASES_PATH = join(
 const NO_BODY_METHODS = new Set([
   "list_orders",
   "get_backtest",
+  "get_backtest_history",
+  "list_backtest_events",
   "get_brokerage",
   "get_custom_indicator",
   "get_optimization",

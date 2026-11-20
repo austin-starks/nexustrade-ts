@@ -55,6 +55,8 @@ export type {
   JsonObject,
   JsonValue,
   ListOrdersOptions,
+  BacktestHistoryOptions,
+  ListBacktestEventsOptions,
   ListPortfoliosOptions,
   NexusTradeClientOptions,
   PortfolioEditOperation,

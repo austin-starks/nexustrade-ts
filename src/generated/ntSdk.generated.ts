@@ -227,7 +227,7 @@ export type DisclosureWatchlistSource = {
   type: "PoliticalRemainingPurchases"; memberId: string; instrument?: "Equity" | "Option" | "All";
   amountBasis?: "LowerBound" | "Midpoint" | "UpperBound"; chamber?: "All" | "House" | "Senate";
 } | { type: "InstitutionalHoldings"; managerCik: string; windowDays?: number }
-  | { type: "InsiderPurchases"; windowDays: number; role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector"; ownerCik?: string; issuerCik?: string };
+  | { type: "InsiderPurchases"; windowDays: number; role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector"; ownerCik?: string; issuerCik?: string; includeAwards?: boolean };
 export type ScreenMetric = { type: "ObservedPrice" | "BarVolume" | "BarDollarVolume" }
   | { type: "Disclosure"; source: DisclosureWatchlistSource };
 export type ScreenRule = { type: "Compare"; field: string; op: "Gt" | "Gte" | "Lt" | "Lte" | "Eq" | "Ne"; value: number }
@@ -826,12 +826,12 @@ export const updateInstitutionalWatchlist = (config: {
 export const updateInsiderWatchlist = (config: {
   watchlistKey: string; windowDays: number;
   role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
-  ownerCik?: string; issuerCik?: string; output?: UpdateWatchlistAction["output"];
+  ownerCik?: string; issuerCik?: string; includeAwards?: boolean; output?: UpdateWatchlistAction["output"];
 }): UpdateWatchlistAction & { source: Extract<DisclosureWatchlistSource, {type: "InsiderPurchases"}> } => ({
   type: "UpdateWatchlist", watchlistKey: config.watchlistKey,
   ...(config.output ? { output: config.output } : {}),
   source: compact({ type: "InsiderPurchases", windowDays: config.windowDays, role: config.role,
-    ownerCik: config.ownerCik, issuerCik: config.issuerCik }) as Extract<DisclosureWatchlistSource, {type: "InsiderPurchases"}>,
+    ownerCik: config.ownerCik, issuerCik: config.issuerCik, includeAwards: config.includeAwards }) as Extract<DisclosureWatchlistSource, {type: "InsiderPurchases"}>,
 });
 
 /** Scalar PIT screen: facts are sampled only when due. Volume uses certified completed historical OHLC at the replay interval; live quote/trade volume stays unknown. */
@@ -1726,9 +1726,9 @@ export function InitialValue(): Indicator {
  * @param asset Pass CANDIDATE in a dynamic rebalance pipeline.
  * @param ownerCik Exact nonzero SEC reporting owner CIK, up to 10 digits. Omit for a whole company (with issuerCik) or aggregate activity.
  * @param issuerCik Company CIK. With ownerCik, restricts that owner to this company. Alone, every reporting owner's events at this company, a joint filing counted once.
- * @param instrument Disclosed instrument; defaults to Equity. Call/Put, award and acquisition metrics, and budget shares require ownerCik or issuerCik. AwardCount is SEC code A issuer acquisitions, not cash purchases or vested-share proof. Its default Equity bucket includes unresolved restricted units. AcquisitionCount and AcquisitionSharePercent combine public code P purchases with code A issuer acquisitions. Shares use qualifying signal counts across all the owner's tickers, or all the company's tickers under issuerCik alone.
+ * @param instrument Disclosed instrument; defaults to Equity. Call/Put, award and acquisition metrics, and budget shares require ownerCik or issuerCik. AwardCount is SEC code A issuer acquisitions, not cash purchases or vested-share proof. AcquisitionValue is disclosed purchase dollars plus award shares at the target's current price. Its default Equity bucket includes unresolved restricted units. AcquisitionCount and AcquisitionSharePercent combine public code P purchases with code A issuer acquisitions. Shares use qualifying signal counts across all the owner's tickers, or all the company's tickers under issuerCik alone.
  */
-export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "AwardCount" | "AcquisitionCount" | "DistinctBuyers" | "PurchaseSharePercent" | "AcquisitionSharePercent", role: Role, windowDays: number, ownerCik?: string, issuerCik?: string, instrument?: Instrument): Indicator {
+export function InsiderTrades(asset: AssetArg, metric: "NetValue" | "BuyValue" | "SellValue" | "NetShares" | "BuyCount" | "SellCount" | "AwardCount" | "AcquisitionValue" | "AcquisitionCount" | "DistinctBuyers" | "PurchaseSharePercent" | "AcquisitionSharePercent", role: Role, windowDays: number, ownerCik?: string, issuerCik?: string, instrument?: Instrument): Indicator {
   const d: Record<string, unknown> = { type: "InsiderTrades" };
   setAsset(d, "targetAsset", asset);
   d["metric"] = metric;
@@ -3078,18 +3078,18 @@ export const geneEntryCooldownDays = (strategyIndex: number, values: number[]): 
 });
 
 /** Sweep ConditionWindowLength (Strategy scope) over a value set. */
-export const geneConditionWindowLength = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[]): Gene => ({
+export const geneConditionWindowLength = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[], indicatorPath?: number[]): Gene => ({
   field: "ConditionWindowLength",
   scope: "Strategy",
-  target: { scope: "Strategy", field: "ConditionWindowLength", strategyIndex, path, slot },
+  target: { scope: "Strategy", field: "ConditionWindowLength", strategyIndex, path, slot, ...(indicatorPath === undefined ? {} : { indicatorPath }) },
   values: values as unknown[],
 });
 
 /** Sweep ConditionThreshold (Strategy scope) over a value set. */
-export const geneConditionThreshold = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[]): Gene => ({
+export const geneConditionThreshold = (strategyIndex: number, path: number[], slot: ConditionNodeSlot, values: number[], indicatorPath?: number[], parameter?: string): Gene => ({
   field: "ConditionThreshold",
   scope: "Strategy",
-  target: { scope: "Strategy", field: "ConditionThreshold", strategyIndex, path, slot },
+  target: { scope: "Strategy", field: "ConditionThreshold", strategyIndex, path, slot, ...(indicatorPath === undefined ? {} : { indicatorPath }), ...(parameter === undefined ? {} : { parameter }) },
   values: values as unknown[],
 });
 
