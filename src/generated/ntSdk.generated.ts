@@ -227,7 +227,7 @@ export type DisclosureWatchlistSource = {
   type: "PoliticalRemainingPurchases"; memberId: string; instrument?: "Equity" | "Option" | "All";
   amountBasis?: "LowerBound" | "Midpoint" | "UpperBound"; chamber?: "All" | "House" | "Senate";
 } | { type: "InstitutionalHoldings"; managerCik: string; windowDays?: number }
-  | { type: "InsiderPurchases"; windowDays: number; role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector"; ownerCik?: string; issuerCik?: string; includeAwards?: boolean };
+  | { type: "InsiderPurchases"; windowDays: number; role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector" | "Ceo"; ownerCik?: string; issuerCik?: string; includeAwards?: boolean };
 export type ScreenMetric = { type: "ObservedPrice" | "BarVolume" | "BarDollarVolume" }
   | { type: "Disclosure"; source: DisclosureWatchlistSource };
 export type ScreenRule = { type: "Compare"; field: string; op: "Gt" | "Gte" | "Lt" | "Lte" | "Eq" | "Ne"; value: number }
@@ -484,7 +484,7 @@ export type OrderStatus = "Pending" | "Accepted" | "Pending User Approval" | "Ca
 export type Side = "Buy" | "Sell";
 export type Clock = "Calendar" | "Trading";
 export type Measure = "Mean" | "Median" | "NetCount" | "ArticleCount";
-export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
+export type Role = "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector" | "Ceo";
 export type Instrument = "Equity" | "Call" | "Put";
 export type Instrument2 = "Equity" | "Option";
 export type MinOrMax = "min" | "max";
@@ -825,7 +825,7 @@ export const updateInstitutionalWatchlist = (config: {
 });
 export const updateInsiderWatchlist = (config: {
   watchlistKey: string; windowDays: number;
-  role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector";
+  role?: "Any" | "Officer" | "Director" | "TenPercentOwner" | "OfficerOrDirector" | "Ceo";
   ownerCik?: string; issuerCik?: string; includeAwards?: boolean; output?: UpdateWatchlistAction["output"];
 }): UpdateWatchlistAction & { source: Extract<DisclosureWatchlistSource, {type: "InsiderPurchases"}> } => ({
   type: "UpdateWatchlist", watchlistKey: config.watchlistKey,
