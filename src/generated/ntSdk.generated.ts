@@ -2831,8 +2831,10 @@ export interface BacktestConfig {
   interval?: "Day" | "Minute";
   /** Starting portfolio value (default 10000) Range 1..inf. */
   initialValue?: number;
-  /** Generate detailed event data (signals, orders, audits) during backtest. Costs 5x research tokens. Events are retained for 3 days. Use query_backtest_events to explore them while retained. */
+  /** Generate detailed event data (signals, orders, audits) during backtest. Costs 5x research tokens for minute-level backtests. Events are retained for 3 days. Use query_backtest_events to explore them while retained. */
   generateEvents?: boolean;
+  /** Quote the estimated research-token cost of a fresh run without launching. Small daily stock backtests are free. Larger runs are priced by strategy, assets scanned, and calendar days including warm-up. */
+  previewOnly?: boolean;
   /** Create and execute a fresh backtest instead of reusing a prior identical result. Defaults to false. Requires portfolio_id. Use for an explicitly requested rerun or warm-cache timing; this reruns the simulation and incurs the normal backtest cost. */
   forceNewRun?: boolean;
   /** Optional fee contract keyed by AssetTypeEnum (Stock/Cryptocurrency/Option) with {amount, type: percent|dollars}. Omit for shared defaults (Option $0.65/contract). For replay of an optimizer/walk-forward study, pass that study's persisted feeConfig. OptionSlippageFraction is supported: 0 fills at quote mid, 1 at ask for buys/bid for sells; omitted uses the engine default 0.5. Fills require a current executable quote; this does not enable last-trade fallback pricing. */
@@ -2946,6 +2948,7 @@ export const backtest = (
     "interval": config.interval,
     "initial_value": config.initialValue,
     "generate_events": config.generateEvents,
+    "preview_only": config.previewOnly,
     "force_new_run": config.forceNewRun,
     "fee_config": config.feeConfig,
     "dividend_policy": config.dividendPolicy,
