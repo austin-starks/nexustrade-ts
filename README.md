@@ -934,7 +934,10 @@ performance saving. Omitted amount basis uses `LowerBound`.
 `updateInstitutionalWatchlist` follows an exact manager's latest publicly
 available complete equity book. `updateInsiderWatchlist` selects qualifying
 positive purchases by first public availability, with optional owner, issuer,
-and role scope. Both use the same publication and consumer contract:
+and role scope. `role: "Ceo"` keeps an owner only when the officer title on that
+same filing names the company's chief executive; a later title never
+reclassifies an earlier purchase. Both use the same publication and consumer
+contract:
 
 ```ts
 const manager = nt.updateInstitutionalWatchlist({
