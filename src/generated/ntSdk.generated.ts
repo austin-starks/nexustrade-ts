@@ -2651,12 +2651,14 @@ export function Stochastic(asset: AssetArg, length: number = 14, interval: Inter
   return d as unknown as Indicator;
 }
 /**
- * AI stock report rating: a fundamental-strength score from 1 to 5, higher is stronger, synthesizing revenue growth, profitability, balance sheet health, valuation and competitive positioning. Point-in-time: a backtest reads the rating in effect on each date. Works on a named ticker and on CANDIDATE inside a rebalance filter, rank or weight, e.g. gte(StockReport(CANDIDATE), Value(3.5)) for fundamentally strong stocks.
+ * AI stock report rating: a fundamental-strength score from 1 to 5, higher is stronger, synthesizing revenue growth, profitability, balance sheet health, valuation and competitive positioning. Point-in-time: a backtest reads the rating in effect on each date. Works on a named ticker and on CANDIDATE inside a rebalance filter, rank or weight, e.g. gte(StockReport(CANDIDATE), Value(3.5)) for fundamentally strong stocks. Omit cadence for the yearly rating; pass Quarterly only when the user asks for quarterly ratings.
  * @param asset Ticker name (ex. SPY, BTC)
+ * @param cadence Omitted (the default) or Annual: the yearly rating, dated December 31, or a new listing's IPO rating until its first yearly one. Quarterly: the newest rating of any kind, including the grade made when each 10-Q or 10-K is filed; on an equal date the yearly rating wins.
  */
-export function StockReport(asset: AssetArg): Indicator {
+export function StockReport(asset: AssetArg, cadence?: "Annual" | "Quarterly"): Indicator {
   const d: Record<string, unknown> = { type: "StockReport" };
   setAsset(d, "targetAsset", asset);
+  if (cadence !== undefined) d["cadence"] = cadence;
   return d as unknown as Indicator;
 }
 /**
