@@ -2843,12 +2843,12 @@ export interface BacktestConfig {
   dividendPolicy?: "cash" | "reinvest";
 }
 export interface WalkForwardConfig {
-  /** Global calendar start for the walk-forward study (ISO date). Each Minute evaluation window cannot exceed 730 days of minute data counting minute-indicator warmup, which is the only cap; the 90-day seed first look is a default for callers who name no dates. */
-  globalStartDate: string;
-  /** Global calendar end for the walk-forward study (ISO date). */
-  globalEndDate: string;
   /** Number of forward folds (2–8, required). Range 2..8. */
   foldCount: number;
+  /** Global calendar start for the walk-forward study (ISO date). Optional: defaults to six years before global_end_date, or for a Minute study to the longest window ending there that fits the cap. Each Minute evaluation window cannot exceed 730 days of minute data counting minute-indicator warmup, which is the only cap. */
+  globalStartDate?: string;
+  /** Global calendar end for the walk-forward study (ISO date). Optional: defaults to the last complete US equity trading session. */
+  globalEndDate?: string;
   /** Child optimizer engine: ga (default) or sweep. Prefer sweep for deploy certification and options rotation books; use ga for exploratory continuous mutation. */
   engineKind?: "ga" | "sweep";
   /** Anchored (default) or rolling outer window mode. */
@@ -2963,9 +2963,9 @@ export const walkForward = (
   tool: "run_walk_forward_study",
   portfolio,
   args: compact({
+    "fold_count": config.foldCount,
     "global_start_date": config.globalStartDate,
     "global_end_date": config.globalEndDate,
-    "fold_count": config.foldCount,
     "engine_kind": config.engineKind,
     "walk_forward_mode": config.walkForwardMode,
     "oos_width_days": config.oosWidthDays,
