@@ -259,6 +259,8 @@ export interface LaunchAgentAction {
   continueExisting: boolean;
   skipPlanning: boolean;
   cooldownMinutes?: number;
+  /** Research tokens each triggered run may spend before it pauses (a whole number, 1 or more); omit for the account's run budget. */
+  runBudgetTokens?: number;
 }
 export interface MeanVarianceAllocationPolicy {
   type: "MeanVariance";
@@ -794,7 +796,7 @@ export const alert = (message: string): AlertAction => ({ type: "Alert", message
 export const launchAgent = (config: {
   planningModel: string; executionModel: string; initialMessage: string;
   maxIterations: number; includeMarketData: boolean; continueExisting: boolean;
-  skipPlanning: boolean; cooldownMinutes?: number; watchlistId?: string;
+  skipPlanning: boolean; cooldownMinutes?: number; watchlistId?: string; runBudgetTokens?: number;
 }): LaunchAgentAction => compact({ type: "LaunchAgent", ...config }) as LaunchAgentAction;
 export const updateWatchlist = (config: {
   watchlistKey: string; memberId: string;
