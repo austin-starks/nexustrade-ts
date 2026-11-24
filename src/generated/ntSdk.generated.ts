@@ -259,6 +259,8 @@ export interface LaunchAgentAction {
   continueExisting: boolean;
   skipPlanning: boolean;
   cooldownMinutes?: number;
+  /** Research tokens each triggered run may spend before it pauses (a whole number, 1 or more); omit for the account's run budget. */
+  runBudgetTokens?: number;
 }
 export interface MeanVarianceAllocationPolicy {
   type: "MeanVariance";
@@ -794,7 +796,7 @@ export const alert = (message: string): AlertAction => ({ type: "Alert", message
 export const launchAgent = (config: {
   planningModel: string; executionModel: string; initialMessage: string;
   maxIterations: number; includeMarketData: boolean; continueExisting: boolean;
-  skipPlanning: boolean; cooldownMinutes?: number; watchlistId?: string;
+  skipPlanning: boolean; cooldownMinutes?: number; watchlistId?: string; runBudgetTokens?: number;
 }): LaunchAgentAction => compact({ type: "LaunchAgent", ...config }) as LaunchAgentAction;
 export const updateWatchlist = (config: {
   watchlistKey: string; memberId: string;
@@ -1088,10 +1090,10 @@ export function AccumulationDistribution(asset: AssetArg, interval: Interval = "
  * Wilder's ADX: trend strength on 0-100, with optional +DI and -DI trend-direction lines. ADX above ~25 is conventionally a strong trend. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param line Which ADX-system line to evaluate
  */
-export function AverageDirectionalIndex(asset: AssetArg, length: number = 14, interval: Interval = "Day", line: "adx" | "plusDi" | "minusDi" = "adx"): Indicator {
+export function AverageDirectionalIndex(asset: AssetArg, length: number = 14, interval: Interval = "TradingDay", line: "adx" | "plusDi" | "minusDi" = "adx"): Indicator {
   const d: Record<string, unknown> = { type: "AverageDirectionalIndex" };
   setAsset(d, "targetAsset", asset);
   d["line"] = line;
@@ -1102,9 +1104,9 @@ export function AverageDirectionalIndex(asset: AssetArg, length: number = 14, in
  * The average of True Range over a window. A smoothed measure of volatility used for position sizing and stop-losses. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function AverageTrueRange(asset: AssetArg, length: number = 14, interval: Interval = "Day"): Indicator {
+export function AverageTrueRange(asset: AssetArg, length: number = 14, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "AverageTrueRange" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1123,10 +1125,10 @@ export function BearishFairValueGap(asset: AssetArg): Indicator {
  * One Bollinger band, returned as a single number: the simple moving average of price plus the given number of standard deviations of price over the same window. A positive number gives the upper band, a negative number the lower band, and 0 the moving average itself. Range: Same scale as price.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param numStandardDeviations How many standard deviations from the mean
  */
-export function BollingerBand(asset: AssetArg, length: number = 30, interval: Interval = "Day", numStandardDeviations: number = 1): Indicator {
+export function BollingerBand(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay", numStandardDeviations: number = 1): Indicator {
   const d: Record<string, unknown> = { type: "BollingerBand" };
   setAsset(d, "targetAsset", asset);
   d["numStandardDeviations"] = numStandardDeviations;
@@ -1154,9 +1156,9 @@ export function BuyingPower(): Indicator {
  * Money flow volume over money volume across N bars, bounded in -1 to +1. Sustained readings above +0.2 show institutional accumulation. Range: -1 to +1.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval: Interval = "Day"): Indicator {
+export function ChaikinMoneyFlow(asset: AssetArg, length: number = 20, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "ChaikinMoneyFlow" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1185,10 +1187,10 @@ export function ChartBar(asset: AssetArg, barMinutes: number = 5, line: "open" |
  * Deviation of the typical price from its moving average, scaled by mean deviation. Readings above +100 are overbought, below -100 oversold. Range: Unbounded (typically -300 to +300).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param constant Divisor scaling the mean deviation
  */
-export function CommodityChannelIndex(asset: AssetArg, length: number = 20, interval: Interval = "Day", constant: number = 0.015): Indicator {
+export function CommodityChannelIndex(asset: AssetArg, length: number = 20, interval: Interval = "TradingDay", constant: number = 0.015): Indicator {
   const d: Record<string, unknown> = { type: "CommodityChannelIndex" };
   setAsset(d, "targetAsset", asset);
   d["constant"] = constant;
@@ -1238,9 +1240,9 @@ export function ConsecutiveIncrease(indicator: Indicator, period: Period, lookba
  * Report whether the ordinary condition has stayed true for the elapsed window. This is elapsed time, not a count of checks.
  * @param condition Condition evaluated over the window.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "Day"): Indicator {
+export function ConsecutiveTrue(condition: Condition, length: number = 1, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "ConsecutiveTrue" };
   d.condition = condition;
   d.window = { length: length, interval: interval };
@@ -1250,9 +1252,9 @@ export function ConsecutiveTrue(condition: Condition, length: number = 1, interv
  * Rolling Pearson correlation (-1 to 1) of two indicators' period-over-period returns over N paired observations. Flat or degenerate windows read no-signal instead of a fabricated number.
  * @param operands One list of exactly 2 sub-indicators.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function Correlation(operands: Indicator[], length: number = 60, interval: Interval = "Day"): Indicator {
+export function Correlation(operands: Indicator[], length: number = 60, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "Correlation" };
   d.indicators = operands;
   d.window = { length: length, interval: interval };
@@ -1265,7 +1267,7 @@ export function Correlation(operands: Indicator[], length: number = 60, interval
  * @param interval Lookback time unit; TradingDay uses observed exchange sessions and TradingMinute (at most 1439) counts regular-session minutes across closed periods.
  * @param countInterval Count at most once per this interval. Omit for one unit of the lookback interval.
  */
-export function CountTrue(condition: Condition, length: number = 1, interval: Interval = "Day", countInterval?: { length: number; interval: Interval }): Indicator {
+export function CountTrue(condition: Condition, length: number = 1, interval: Interval = "TradingDay", countInterval?: { length: number; interval: Interval }): Indicator {
   const d: Record<string, unknown> = { type: "CountTrue" };
   d.condition = condition;
   if (countInterval !== undefined) d["countInterval"] = countInterval;
@@ -1424,7 +1426,7 @@ export function DaysSinceStrategyFired(): Indicator {
   return d as unknown as Indicator;
 }
 /**
- * Calendar days until the asset's next expected earnings report. In backtests the next date is a point-in-time cadence estimate from the last report (no look-ahead); live trading uses the real next scheduled date. Use to time entries and exits around earnings. Range: >= 0 (0 on/after the expected report day; counts down as it nears).
+ * Calendar days until the asset's next expected earnings report. The next date is an estimate: the last filed SEC earnings report plus the quarterly cadence (91 days), rolled forward once it passes. Backtests and live trading compute it identically from filings made at or before each moment, so a backtest never sees a report date before it is filed. Missing when the asset has no filed report in the last 400 days. Use to time entries and exits around earnings. Range: 0 to 91 (counts down toward the expected report; reads 0 in the final day before it, then rolls to 90 or 91 once the estimate passes).
  * @param asset Ticker name (ex. SPY, BTC)
  */
 export function DaysUntilEarnings(asset: AssetArg): Indicator {
@@ -1444,10 +1446,10 @@ export function Divide(left: Indicator, right: Indicator): Indicator {
  * Highest high and lowest low over N bars with a midline. Breaks of either edge are breakout entries; the midline is the first pullback level. Range: Price scale.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param line Which Donchian line to evaluate
  */
-export function DonchianChannel(asset: AssetArg, length: number = 20, interval: Interval = "Day", line: "upper" | "lower" | "middle" = "upper"): Indicator {
+export function DonchianChannel(asset: AssetArg, length: number = 20, interval: Interval = "TradingDay", line: "upper" | "lower" | "middle" = "upper"): Indicator {
   const d: Record<string, unknown> = { type: "DonchianChannel" };
   setAsset(d, "targetAsset", asset);
   d["line"] = line;
@@ -1467,9 +1469,9 @@ export function Economic(metric: "NonfarmPayrolls" | "UnemploymentRate" | "Money
  * SMA/EMA window interval Day means elapsed calendar time, including closed exchange dates. TradingDay uses the exchange-session clock for exchange-traded assets and skips closed dates while preserving within-session time. For a conventional N-day stock moving average, author interval TradingDay unless the request explicitly specifies elapsed calendar days. An outer TradingDay lag does not change an inner Day average into an N-session average. Preserve an explicit calendar-day request as Day. Continuous-market daily windows use 24-hour Day intervals. A TradingDay window can still have a forming current reading: choose completed-session references separately when the signal requires confirmed closes. ChartBar periods and offsets already identify completed candles; preserve that clock instead of substituting a time-window average.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function ExponentialMovingAverage(asset: AssetArg, length: number, interval: Interval = "Day"): Indicator {
+export function ExponentialMovingAverage(asset: AssetArg, length: number, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "ExponentialMovingAverage" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1539,11 +1541,11 @@ export function HighOfDay(asset: AssetArg): Indicator {
  * Five-line trend system: Tenkan and Kijun midpoints, Senkou A/B cloud bands, and the Chikou lagging line. Lines are evaluated unshifted. Price above the cloud with Tenkan above Kijun is the full bullish alignment. Range: Price scale.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param spanLength Senkou B lookback in bars (Kijun scales from conversion)
  * @param line Which Ichimoku line to evaluate (unshifted)
  */
-export function IchimokuCloud(asset: AssetArg, length: number = 9, interval: Interval = "Day", spanLength: number = 52, line: "tenkan" | "kijun" | "senkouA" | "senkouB" | "chikou" = "tenkan"): Indicator {
+export function IchimokuCloud(asset: AssetArg, length: number = 9, interval: Interval = "TradingDay", spanLength: number = 52, line: "tenkan" | "kijun" | "senkouA" | "senkouB" | "chikou" = "tenkan"): Indicator {
   const d: Record<string, unknown> = { type: "IchimokuCloud" };
   setAsset(d, "targetAsset", asset);
   d["spanLength"] = spanLength;
@@ -1613,9 +1615,9 @@ export function IndicatorAtMinutesAfterOpen(operand: Indicator, minutesAfterOpen
 /**
  * Computes the Exponential Moving Average of any other indicator. TradingDay follows the input markets: crypto-only inputs use elapsed 24-hour days, including weekends, just like Day. Stock, option, mixed-market and asset-free expressions use confirmed exchange sessions. The window does not change intraday prices into daily closing prices. TradingMinute counts regular-session minutes the same way, so a 70 TradingMinute window at 9:45 reaches back to 3:06 PM on the prior session (the overnight gap is one step); crypto-only inputs use elapsed minutes. It allows at most 1439 minutes; use TradingDay for longer lookbacks. Indicators read every tick have no TradingMinute value outside regular hours, and windows over a ChartBar keep the value of its latest completed candle.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IndicatorExponentialMovingAverage(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+export function IndicatorExponentialMovingAverage(operand: Indicator, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorExponentialMovingAverage" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -1624,9 +1626,9 @@ export function IndicatorExponentialMovingAverage(operand: Indicator, length: nu
 /**
  * Rolling maximum of one numeric operand over a time window. ChartBar observations keep their completed candle end time; repeated reads do not extend their age. Available history is used, so express full-history coverage separately.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IndicatorMaximum(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+export function IndicatorMaximum(operand: Indicator, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorMaximum" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -1635,9 +1637,9 @@ export function IndicatorMaximum(operand: Indicator, length: number = 30, interv
 /**
  * Computes the MAD of any indicator over a window. Less sensitive to outliers than standard deviation.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IndicatorMeanAbsoluteDeviation(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+export function IndicatorMeanAbsoluteDeviation(operand: Indicator, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorMeanAbsoluteDeviation" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -1646,9 +1648,9 @@ export function IndicatorMeanAbsoluteDeviation(operand: Indicator, length: numbe
 /**
  * Rolling minimum of one numeric operand over a time window. ChartBar observations keep their completed candle end time; repeated reads do not extend their age. Available history is used, so express full-history coverage separately.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IndicatorMinimum(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+export function IndicatorMinimum(operand: Indicator, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorMinimum" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -1657,9 +1659,9 @@ export function IndicatorMinimum(operand: Indicator, length: number = 30, interv
 /**
  * The percentage change of any indicator over a window.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IndicatorRateOfChange(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+export function IndicatorRateOfChange(operand: Indicator, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorRateOfChange" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -1668,9 +1670,9 @@ export function IndicatorRateOfChange(operand: Indicator, length: number = 30, i
 /**
  * Computes the Simple Moving Average of any other indicator over a window. TradingDay follows the input markets: crypto-only inputs use elapsed 24-hour days, including weekends, just like Day. Stock, option, mixed-market and asset-free expressions use confirmed exchange sessions. The window does not change intraday prices into daily closing prices. TradingMinute counts regular-session minutes the same way, so a 70 TradingMinute window at 9:45 reaches back to 3:06 PM on the prior session (the overnight gap is one step); crypto-only inputs use elapsed minutes. It allows at most 1439 minutes; use TradingDay for longer lookbacks. Indicators read every tick have no TradingMinute value outside regular hours, and windows over a ChartBar keep the value of its latest completed candle.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IndicatorSimpleMovingAverage(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+export function IndicatorSimpleMovingAverage(operand: Indicator, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorSimpleMovingAverage" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -1679,9 +1681,9 @@ export function IndicatorSimpleMovingAverage(operand: Indicator, length: number 
 /**
  * Computes the standard deviation of any indicator over a window.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IndicatorStandardDeviation(operand: Indicator, length: number = 30, interval: Interval = "Day"): Indicator {
+export function IndicatorStandardDeviation(operand: Indicator, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorStandardDeviation" };
   d.indicators = [operand];
   d.window = { length: length, interval: interval };
@@ -1690,7 +1692,7 @@ export function IndicatorStandardDeviation(operand: Indicator, length: number = 
 /**
  * Value at an elapsed time in the past. TradingDay instead reads the confirmed closing value of the reference exchange session, including early closes. Missing session evidence returns no value; initialValue applies before enough history exists.
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
 export function IndicatorWindowAgo(operand: Indicator, length: number, interval: Interval, initialValue?: number): Indicator {
   const d: Record<string, unknown> = { type: "IndicatorWindowAgo" };
@@ -1826,9 +1828,9 @@ export function IVHVRatio(asset: AssetArg, hvWindow: number = 20): Indicator {
  * Percent of sessions in the lookback window whose constant-maturity ATM IV was strictly below today's (0–100). Distinct from IV Rank. Used on each candidate of a dynamic rebalance over a broad universe (all US stocks, an index or a watchlist), it reads options chains with Greeks for every stock in that universe instead of one underlying, so the run is heavier than with a named ticker or a specific asset list. Range: 0–100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IVPercentile(asset: AssetArg, length: number = 252, interval: Interval = "Day"): Indicator {
+export function IVPercentile(asset: AssetArg, length: number = 252, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IVPercentile" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1838,9 +1840,9 @@ export function IVPercentile(asset: AssetArg, length: number = 252, interval: In
  * Where today's constant-maturity ATM IV sits between the lookback window's high and low: (IV − IV_low) / (IV_high − IV_low) × 100. Distinct from IV Percentile. Used on each candidate of a dynamic rebalance over a broad universe (all US stocks, an index or a watchlist), it reads options chains with Greeks for every stock in that universe instead of one underlying, so the run is heavier than with a named ticker or a specific asset list. Range: 0–100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function IVRank(asset: AssetArg, length: number = 252, interval: Interval = "Day"): Indicator {
+export function IVRank(asset: AssetArg, length: number = 252, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "IVRank" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1850,11 +1852,11 @@ export function IVRank(asset: AssetArg, length: number = 252, interval: Interval
  * EMA midline with ATR bands above and below. Tighter than Bollinger in calm tape, so closes outside the bands mean stronger conviction moves. Range: Price scale.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param multiplier How many ATRs from the EMA midline
  * @param line Which Keltner line to evaluate
  */
-export function KeltnerChannel(asset: AssetArg, length: number = 20, interval: Interval = "Day", multiplier: number = 2, line: "upper" | "middle" | "lower" = "middle"): Indicator {
+export function KeltnerChannel(asset: AssetArg, length: number = 20, interval: Interval = "TradingDay", multiplier: number = 2, line: "upper" | "middle" | "lower" = "middle"): Indicator {
   const d: Record<string, unknown> = { type: "KeltnerChannel" };
   setAsset(d, "targetAsset", asset);
   d["multiplier"] = multiplier;
@@ -1915,9 +1917,9 @@ export function Max(left: Indicator, right: Indicator): Indicator {
  * The largest peak-to-trough percentage decline of the asset's price inside the window, reported as a positive number: 10 means a 10% fall from a high to a later low, and 0 means the price never fell below an earlier price in the window. Measures worst-case downside risk. Range: 0 to 100 (percent, never negative).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function MaxDrawdown(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function MaxDrawdown(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "MaxDrawdown" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1927,9 +1929,9 @@ export function MaxDrawdown(asset: AssetArg, length: number = 30, interval: Inte
  * The maximum trough-to-peak percentage increase over a window. Range: >= 0 (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function MaxDrawup(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function MaxDrawup(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "MaxDrawup" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1939,9 +1941,9 @@ export function MaxDrawup(asset: AssetArg, length: number = 30, interval: Interv
  * The highest of the asset's observed prices over a window, including the current one. Each observation is the price at that time (a completed day contributes its close, a completed minute its closing price), not an intrabar high. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function MaximumPrice(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function MaximumPrice(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "MaximumPrice" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -1959,9 +1961,9 @@ export function Min(left: Indicator, right: Indicator): Indicator {
  * The lowest of the asset's observed prices over a window, including the current one. Each observation is the price at that time (a completed day contributes its close, a completed minute its closing price), not an intrabar low. Range: > 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function MinimumPrice(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function MinimumPrice(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "MinimumPrice" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2064,9 +2066,9 @@ export function MinutesUntilClose(): Indicator {
  * Volume-weighted RSI: money flow direction over N bars on a 0-100 scale. Above 80 is overbought, below 20 oversold. Requires volume data. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function MoneyFlowIndex(asset: AssetArg, length: number = 14, interval: Interval = "Day"): Indicator {
+export function MoneyFlowIndex(asset: AssetArg, length: number = 14, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "MoneyFlowIndex" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2544,9 +2546,9 @@ export function PriceChangeSinceOpen(asset: AssetArg): Indicator {
  * The mean absolute deviation of an asset's price over a window. Similar to standard deviation but less sensitive to outliers. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function PriceMeanAbsoluteDeviation(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function PriceMeanAbsoluteDeviation(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "PriceMeanAbsoluteDeviation" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2556,9 +2558,9 @@ export function PriceMeanAbsoluteDeviation(asset: AssetArg, length: number = 30,
  * Measures the percentage change in price between the current price and the price N periods ago. Range: Unbounded (percentage).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function PriceRateOfChange(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function PriceRateOfChange(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "PriceRateOfChange" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2568,9 +2570,9 @@ export function PriceRateOfChange(asset: AssetArg, length: number = 30, interval
  * The standard deviation of an asset's closing price over a window. Measures price volatility. Range: >= 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function PriceStandardDeviation(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function PriceStandardDeviation(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "PriceStandardDeviation" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2590,9 +2592,9 @@ export function RebalanceDecisionMetric(metric: "allocationDrift" | "plannedTurn
  * Measures the speed and magnitude of recent price changes. Oscillates between 0 and 100. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function RelativeStrengthIndex(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function RelativeStrengthIndex(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "RelativeStrengthIndex" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2603,9 +2605,9 @@ export const RSI = RelativeStrengthIndex;
  * Current bar volume divided by the average volume of the trailing N completed bars. 1.0 means the bar is trading exactly its recent pace. Range: >= 0 (ratio around 1.0).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function RelativeVolume(asset: AssetArg, length: number = 14, interval: Interval = "Day"): Indicator {
+export function RelativeVolume(asset: AssetArg, length: number = 14, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "RelativeVolume" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2615,9 +2617,9 @@ export function RelativeVolume(asset: AssetArg, length: number = 14, interval: I
  * SMA/EMA window interval Day means elapsed calendar time, including closed exchange dates. TradingDay uses the exchange-session clock for exchange-traded assets and skips closed dates while preserving within-session time. For a conventional N-day stock moving average, author interval TradingDay unless the request explicitly specifies elapsed calendar days. An outer TradingDay lag does not change an inner Day average into an N-session average. Preserve an explicit calendar-day request as Day. Continuous-market daily windows use 24-hour Day intervals. A TradingDay window can still have a forming current reading: choose completed-session references separately when the signal requires confirmed closes. ChartBar periods and offsets already identify completed candles; preserve that clock instead of substituting a time-window average.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function SimpleMovingAverage(asset: AssetArg, length: number = 30, interval: Interval = "Day"): Indicator {
+export function SimpleMovingAverage(asset: AssetArg, length: number = 30, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "SimpleMovingAverage" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2636,12 +2638,12 @@ export function SquareRoot(operand: Indicator): Indicator {
  * Momentum oscillator comparing the close to the high-low range over N bars, with %K smoothing and a %D signal average. Readings above 80 are overbought, below 20 oversold. Range: 0 to 100.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param smoothK Moving-average length applied to raw %K
  * @param smoothD Moving-average length applied to smoothed %K
  * @param line Which stochastic line to evaluate
  */
-export function Stochastic(asset: AssetArg, length: number = 14, interval: Interval = "Day", smoothK: number = 3, smoothD: number = 3, line: "k" | "d" = "k"): Indicator {
+export function Stochastic(asset: AssetArg, length: number = 14, interval: Interval = "TradingDay", smoothK: number = 3, smoothD: number = 3, line: "k" | "d" = "k"): Indicator {
   const d: Record<string, unknown> = { type: "Stochastic" };
   setAsset(d, "targetAsset", asset);
   d["smoothK"] = smoothK;
@@ -2651,12 +2653,14 @@ export function Stochastic(asset: AssetArg, length: number = 14, interval: Inter
   return d as unknown as Indicator;
 }
 /**
- * AI stock report rating: a fundamental-strength score from 1 to 5, higher is stronger, synthesizing revenue growth, profitability, balance sheet health, valuation and competitive positioning. Point-in-time: a backtest reads the rating in effect on each date. Works on a named ticker and on CANDIDATE inside a rebalance filter, rank or weight, e.g. gte(StockReport(CANDIDATE), Value(3.5)) for fundamentally strong stocks.
+ * AI stock report rating: a fundamental-strength score from 1 to 5, higher is stronger, synthesizing revenue growth, profitability, balance sheet health, valuation and competitive positioning. Point-in-time: a backtest reads the rating in effect on each date. Works on a named ticker and on CANDIDATE inside a rebalance filter, rank or weight, e.g. gte(StockReport(CANDIDATE), Value(3.5)) for fundamentally strong stocks. Omit cadence for the yearly rating; pass Quarterly only when the user asks for quarterly ratings.
  * @param asset Ticker name (ex. SPY, BTC)
+ * @param cadence Omitted (the default) or Annual: the yearly rating, dated December 31, or a new listing's IPO rating until its first yearly one. Quarterly: the newest rating of any kind, including the grade made when each 10-Q or 10-K is filed; on an equal date the yearly rating wins.
  */
-export function StockReport(asset: AssetArg): Indicator {
+export function StockReport(asset: AssetArg, cadence?: "Annual" | "Quarterly"): Indicator {
   const d: Record<string, unknown> = { type: "StockReport" };
   setAsset(d, "targetAsset", asset);
+  if (cadence !== undefined) d["cadence"] = cadence;
   return d as unknown as Indicator;
 }
 /**
@@ -2664,10 +2668,10 @@ export function StockReport(asset: AssetArg): Indicator {
  * @param side Matches order events with this side (buy or sell)
  * @param orderStatus Matches order events with this status
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param assets Ticker name (ex. SPY, BTC)
  */
-export function SumOrderAmount(side: Side, orderStatus: OrderStatus = "Filled", length: number = 1, interval: Interval = "Day", assets?: AssetArg | AssetArg[]): Indicator {
+export function SumOrderAmount(side: Side, orderStatus: OrderStatus = "Filled", length: number = 1, interval: Interval = "TradingDay", assets?: AssetArg | AssetArg[]): Indicator {
   const d: Record<string, unknown> = { type: "SumOrderAmount" };
   d["side"] = side;
   d["orderStatus"] = orderStatus;
@@ -2680,10 +2684,10 @@ export function SumOrderAmount(side: Side, orderStatus: OrderStatus = "Filled", 
  * @param side Matches order events with this side (buy or sell)
  * @param orderStatus Matches order events with this status
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param assets Ticker name (ex. SPY, BTC)
  */
-export function SumOrderQuantity(side: Side, orderStatus: OrderStatus = "Filled", length: number = 1, interval: Interval = "Day", assets?: AssetArg | AssetArg[]): Indicator {
+export function SumOrderQuantity(side: Side, orderStatus: OrderStatus = "Filled", length: number = 1, interval: Interval = "TradingDay", assets?: AssetArg | AssetArg[]): Indicator {
   const d: Record<string, unknown> = { type: "SumOrderQuantity" };
   d["side"] = side;
   d["orderStatus"] = orderStatus;
@@ -2695,11 +2699,11 @@ export function SumOrderQuantity(side: Side, orderStatus: OrderStatus = "Filled"
  * ATR trailing band that ratchets with the trend and flips sides on a close through it. The direction line reads +1 in an uptrend, -1 in a downtrend. Range: Price scale (value); +1 / -1 (direction).
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  * @param multiplier How many ATRs from HL2
  * @param line Band value or trend direction (+1 up, -1 down)
  */
-export function Supertrend(asset: AssetArg, length: number = 10, interval: Interval = "Day", multiplier: number = 3, line: "value" | "direction" = "value"): Indicator {
+export function Supertrend(asset: AssetArg, length: number = 10, interval: Interval = "TradingDay", multiplier: number = 3, line: "value" | "direction" = "value"): Indicator {
   const d: Record<string, unknown> = { type: "Supertrend" };
   setAsset(d, "targetAsset", asset);
   d["multiplier"] = multiplier;
@@ -2768,9 +2772,9 @@ export function VWAP(asset: AssetArg): Indicator {
  * Momentum oscillator placing the close within the high-low range over N bars, on a -100 to 0 scale. Above -20 is overbought, below -80 oversold. Range: -100 to 0.
  * @param asset Ticker name (ex. SPY, BTC)
  * @param length Length of time
- * @param interval Unit of time
+ * @param interval Unit of time. TradingDay counts exchange sessions (20 is 20 sessions); Day is elapsed calendar days
  */
-export function WilliamsR(asset: AssetArg, length: number = 14, interval: Interval = "Day"): Indicator {
+export function WilliamsR(asset: AssetArg, length: number = 14, interval: Interval = "TradingDay"): Indicator {
   const d: Record<string, unknown> = { type: "WilliamsR" };
   setAsset(d, "targetAsset", asset);
   d.window = { length: length, interval: interval };
@@ -2843,12 +2847,12 @@ export interface BacktestConfig {
   dividendPolicy?: "cash" | "reinvest";
 }
 export interface WalkForwardConfig {
-  /** Global calendar start for the walk-forward study (ISO date). Each Minute evaluation window cannot exceed 730 days of minute data counting minute-indicator warmup, which is the only cap; the 90-day seed first look is a default for callers who name no dates. */
-  globalStartDate: string;
-  /** Global calendar end for the walk-forward study (ISO date). */
-  globalEndDate: string;
   /** Number of forward folds (2–8, required). Range 2..8. */
   foldCount: number;
+  /** Global calendar start for the walk-forward study (ISO date). Optional: defaults to six years before global_end_date, or for a Minute study to the longest window ending there that fits the cap. Each Minute evaluation window cannot exceed 730 days of minute data counting minute-indicator warmup, which is the only cap. */
+  globalStartDate?: string;
+  /** Global calendar end for the walk-forward study (ISO date). Optional: defaults to the last complete US equity trading session. */
+  globalEndDate?: string;
   /** Child optimizer engine: ga (default) or sweep. Prefer sweep for deploy certification and options rotation books; use ga for exploratory continuous mutation. */
   engineKind?: "ga" | "sweep";
   /** Anchored (default) or rolling outer window mode. */
@@ -2963,9 +2967,9 @@ export const walkForward = (
   tool: "run_walk_forward_study",
   portfolio,
   args: compact({
+    "fold_count": config.foldCount,
     "global_start_date": config.globalStartDate,
     "global_end_date": config.globalEndDate,
-    "fold_count": config.foldCount,
     "engine_kind": config.engineKind,
     "walk_forward_mode": config.walkForwardMode,
     "oos_width_days": config.oosWidthDays,
