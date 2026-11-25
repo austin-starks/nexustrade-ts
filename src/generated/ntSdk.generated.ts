@@ -362,28 +362,11 @@ export interface OptionPositionSelector {
   requireShortStrikeAboveParentStrike?: boolean;
   strikeOffsetFromParent?: ParentStrikeOffset;
 }
-/**
- * Measure every leg's strike from a leg of a held spread instead of spot; each
- * resolved strike must match exactly. Filter fields mean what they mean on
- * OptionSpreadCount (direction long = debit). Legging into a call butterfly:
- * credit legs short call distance 0 + long call distance 5 (dollars) with
- * spreadStrikeAnchor({ optionType: "call", direction: "long",
- * spreadType: "vertical", leg: "short" }).
- */
-export interface SpreadStrikeAnchor {
-  underlying?: string;
-  optionType?: OptionType;
-  direction?: OptionDirection;
-  spreadType?: OptionSpreadType;
-  leg: OptionDirection;
-  selection?: "newest" | "oldest";
-}
 export interface OpenOptionAction {
   type: "OpenOption";
   builder: OptionsBuilder;
   allocation?: OptionAllocation;
   against?: OptionPositionSelector;
-  strikeAnchor?: SpreadStrikeAnchor;
 }
 export type CloseQuantity =
   | { type: "all" }
@@ -942,15 +925,10 @@ export const againstParent = (
   config: OptionPositionSelector,
 ): OptionPositionSelector => compact(config) as OptionPositionSelector;
 
-export const spreadStrikeAnchor = (
-  config: SpreadStrikeAnchor,
-): SpreadStrikeAnchor => compact(config) as SpreadStrikeAnchor;
-
 export const openOption = (config: {
   builder: OptionsBuilder;
   allocation?: OptionAllocation;
   against?: OptionPositionSelector;
-  strikeAnchor?: SpreadStrikeAnchor;
 }): OpenOptionAction => compact({ type: "OpenOption", ...config }) as OpenOptionAction;
 
 export const structureTemplate = (config: {
