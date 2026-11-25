@@ -176,6 +176,15 @@ export interface OptionsBuilder {
   legs: OptionsBuilderLeg[];
   underlyingSymbol?: string;
   dynamicUnderlying?: DynamicUnderlying;
+  /**
+   * vertical, ironCondor, straddle and strangle legs always resolve to ONE shared
+   * expiration: the engine picks one observed date inside every leg's DTE window
+   * (their intersection), ordered by the first leg's preference. Per-leg windows
+   * never split the expiry; disjoint windows fail validation, and a date with no
+   * quotable expiration in the intersection is rejected as "No common observed
+   * expiration". Omitted, the type is inferred from the legs. calendar, diagonal
+   * and custom resolve each leg's expiration independently.
+   */
   spreadType?: OptionSpreadType;
   widthConstraint?: SpreadWidthConstraint;
 }
@@ -184,6 +193,7 @@ export interface OptionStructureTemplate {
   name?: string;
   /** May be candidate-bound (evaluated per underlying). */
   eligibility?: Condition | CandidateCondition;
+  /** Shared-expiration rule as on OptionsBuilder.spreadType. */
   spreadType?: OptionSpreadType;
   widthConstraint?: SpreadWidthConstraint;
 }
