@@ -81,8 +81,13 @@ export interface ExpirationSelector {
   maxDaysToExpiration: number;
   preference: ExpirationPreference;
 }
-/** Calls: positive distance = OTM (higher strike). Puts: positive = OTM (lower strike). 0 = ATM. Delta = absolute target delta. */
-export interface StrikeSelector { distanceType: StrikeDistanceType; distance: number }
+/**
+ * Calls: positive distance = OTM (higher strike). Puts: positive = OTM (lower strike). 0 = ATM. Delta = absolute target delta.
+ * distanceType "strike": distance is the strike price itself, traded exactly or not at all.
+ * On OpenOption legs distance may be an Indicator evaluated when the strategy fires,
+ * e.g. OptionSpreadLegStrike(...) to reuse a held spread's strike.
+ */
+export interface StrikeSelector { distanceType: StrikeDistanceType; distance: number | Indicator }
 /** Search window when the primary strike is unaffordable / missing. */
 export interface StrikeRange {
   startDistance: number;
@@ -139,10 +144,10 @@ export type LegConfigBase = {
   greekFilter?: GreekFilter;
   liquidityFilter?: LiquidityFilter;
 };
-/** Percent/dollars strike — fallback optional. */
+/** Percent/dollars/exact strike — fallback optional. distance may be an Indicator on OpenOption legs. */
 export type LegConfigPercentOrDollars = LegConfigBase & {
-  distance: number;
-  distanceType?: "percent" | "dollars";
+  distance: number | Indicator;
+  distanceType?: "percent" | "dollars" | "strike";
   fallbackDistance?: number;
   fallbackDistanceType?: "percent" | "dollars";
   fallbackStrikeSelector?: StrikeSelector;
@@ -176,6 +181,15 @@ export interface OptionsBuilder {
   legs: OptionsBuilderLeg[];
   underlyingSymbol?: string;
   dynamicUnderlying?: DynamicUnderlying;
+  /**
+   * vertical, ironCondor, straddle and strangle legs always resolve to ONE shared
+   * expiration: the engine picks one observed date inside every leg's DTE window
+   * (their intersection), ordered by the first leg's preference. Per-leg windows
+   * never split the expiry; disjoint windows fail validation, and a date with no
+   * quotable expiration in the intersection is rejected as "No common observed
+   * expiration". Omitted, the type is inferred from the legs. calendar, diagonal
+   * and custom resolve each leg's expiration independently.
+   */
   spreadType?: OptionSpreadType;
   widthConstraint?: SpreadWidthConstraint;
 }
@@ -184,6 +198,7 @@ export interface OptionStructureTemplate {
   name?: string;
   /** May be candidate-bound (evaluated per underlying). */
   eligibility?: Condition | CandidateCondition;
+  /** Shared-expiration rule as on OptionsBuilder.spreadType. */
   spreadType?: OptionSpreadType;
   widthConstraint?: SpreadWidthConstraint;
 }
@@ -470,7 +485,7 @@ export type AllocationType = "percent of portfolio" | "percent of buying power" 
 export type OptionAllocationType = "dollars" | "percent of portfolio" | "percent of buying power" | "contracts" | "percent of realized premium";
 export type DeploymentBudgetType = "dollars" | "percent of portfolio";
 export type ExpirationPreference = "nearest" | "middle" | "furthest";
-export type StrikeDistanceType = "percent" | "dollars" | "delta";
+export type StrikeDistanceType = "percent" | "dollars" | "delta" | "strike";
 export type StrikeRangeIteration = "OTMToITM" | "ITMToOTM";
 export type ExpirationRangeIteration = "ShortestFirst" | "LongestFirst";
 export type CloseQuantityType = "all" | "contracts" | "percent";
@@ -2367,6 +2382,25 @@ export function OptionSpreadEntryPrice(underlying: string, optionType: OptionTyp
   d["optionType"] = optionType;
   d["direction"] = direction;
   d["spreadType"] = spreadType;
+  return d as unknown as Indicator;
+}
+/**
+ * Returns the strike price of one leg (short or long) of the open option spreads matching the filter. Min or Max picks across several matching spreads. Has no value when no matching spread is open. Use it as an option leg's strike, with Strike Distance Type set to strike, to trade exactly a held spread's strike, for example selling a credit vertical at the same short strike as a filled debit vertical to leg into a butterfly. Range: 0 to ∞ (strike price in dollars).
+ * @param underlying Filter by underlying (e.g., AAPL, SPY). Leave empty for all.
+ * @param optionType Filter by Call or Put. Leave empty for all.
+ * @param direction Filter by Long or Short. Leave empty for all.
+ * @param spreadType Filter by spread type. Leave empty for all.
+ * @param leg Which leg of each matching spread supplies the strike.
+ * @param minOrMax Return minimum or maximum value across matching spreads.
+ */
+export function OptionSpreadLegStrike(underlying: string, optionType: OptionType, direction: OptionDirection, spreadType: OptionSpreadType, leg: "short" | "long" = "short", minOrMax: MinOrMax = "min"): Indicator {
+  const d: Record<string, unknown> = { type: "OptionSpreadLegStrike" };
+  d["underlying"] = underlying;
+  d["optionType"] = optionType;
+  d["direction"] = direction;
+  d["spreadType"] = spreadType;
+  d["leg"] = leg;
+  d["minOrMax"] = minOrMax;
   return d as unknown as Indicator;
 }
 /**
